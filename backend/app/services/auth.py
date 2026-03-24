@@ -39,8 +39,8 @@ class AuthService:
         await db.refresh(new_user)
         return UserResponse.model_validate(new_user)
 
-    async def authenticate_user(self, username: str, password: str, db: AsyncSession):
-        result = await db.execute(select(User).where(User.username == username))
+    async def authenticate_user(self, email: str, password: str, db: AsyncSession):
+        result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if user is None:
             return None

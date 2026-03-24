@@ -19,7 +19,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 async def login(form_data: LoginRequest,
                 response: Response,
                 db: AsyncSession = Depends(get_db)):
-    result = await auth_service.authenticate_user(form_data.username, form_data.password, db)
+    result = await auth_service.authenticate_user(form_data.email, form_data.password, db)
     if result is None:
         raise HTTPException(status_code=401, detail="Incorrect username or password", headers={"WWW-Authenticate": "Bearer"})
     access = auth_service.create_access_token(result.id)
