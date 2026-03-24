@@ -3,7 +3,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api import health, auth
 
-app = FastAPI()
+app = FastAPI(swagger_ui_parameters={"persistAuthorization": True})
 
 app.add_middleware(
     CORSMiddleware,
