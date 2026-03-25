@@ -10,28 +10,32 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-class AuthService:
 
+class AuthService:
     async def register(self, user_data: UserCreate, db: AsyncSession):
-        result_email = await db.execute(select(User).where(User.email == user_data.email))
+        result_email = await db.execute(
+            select(User).where(User.email == user_data.email)
+        )
         user_email = result_email.scalar_one_or_none()
         if user_email is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
             )
-        result_username = await db.execute(select(User).where(User.username == user_data.username))
+        result_username = await db.execute(
+            select(User).where(User.username == user_data.username)
+        )
         user_username = result_username.scalar_one_or_none()
         if user_username is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered"
+                detail="Username already registered",
             )
 
         new_user = User(
             email=user_data.email,
             username=user_data.username,
-            password=pwd_context.hash(user_data.password)
+            password=pwd_context.hash(user_data.password),
         )
 
         db.add(new_user)
@@ -52,10 +56,7 @@ class AuthService:
 
     def create_access_token(self, user_id: int) -> str:
         utc_now = datetime.now(timezone.utc)
-        payload = {
-            "sub": str(user_id),
-            "exp": utc_now + timedelta(minutes=30)
-        }
+        payload = {"sub": str(user_id), "exp": utc_now + timedelta(minutes=30)}
 
         return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
@@ -64,7 +65,7 @@ class AuthService:
         payload = {
             "sub": str(user_id),
             "exp": utc_now + timedelta(days=30),
-            "type": "refresh"
+            "type": "refresh",
         }
 
         return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")

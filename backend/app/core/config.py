@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     DATABASE_URL: str
     MONGO_URL: str
@@ -12,5 +13,5 @@ class Settings(BaseSettings):
     BUCKET_REGION: str
 
 
-settings = Settings()
+settings = Settings() 
 

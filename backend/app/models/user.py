@@ -5,9 +5,11 @@ from sqlalchemy import String, func
 from datetime import datetime
 from app.core.database import Base
 
+
 class UserRole(str, Enum):
     client = "client"
     moderator = "moderator"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -22,4 +24,6 @@ class User(Base):
     avatar: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bio: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telegram_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    user_role: Mapped[UserRole] = mapped_column(default=UserRole.client, server_default="client")
+    user_role: Mapped[UserRole] = mapped_column(
+        default=UserRole.client, server_default="client"
+    )

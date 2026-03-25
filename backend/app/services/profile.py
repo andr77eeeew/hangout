@@ -13,8 +13,8 @@ from app.schemas.user import UserUpdate, PasswordUpdate
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-class ProfileService:
 
+class ProfileService:
     @staticmethod
     async def update_user(user_id: int, data: UserUpdate, db: AsyncSession):
         update_data = data.model_dump(exclude_unset=True)
@@ -22,27 +22,31 @@ class ProfileService:
             raise HTTPException(status_code=400, detail="Nothing to Update")
 
         if "email" in update_data:
-            check_email = await db.execute(select(User).where(User.email == update_data["email"], User.id != user_id))
+            check_email = await db.execute(
+                select(User).where(
+                    User.email == update_data["email"], User.id != user_id
+                )
+            )
             user_email = check_email.scalar_one_or_none()
             if user_email is not None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
+                    detail="Email already registered",
                 )
         if "username" in update_data:
-            check_username = await db.execute(select(User).where(User.username == update_data["username"], User.id != user_id))
+            check_username = await db.execute(
+                select(User).where(
+                    User.username == update_data["username"], User.id != user_id
+                )
+            )
             user_username = check_username.scalar_one_or_none()
             if user_username is not None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username already registered"
+                    detail="Username already registered",
                 )
 
-        await db.execute(
-            update(User)
-            .where(User.id == user_id)
-            .values(**update_data)
-        )
+        await db.execute(update(User).where(User.id == user_id).values(**update_data))
         await db.flush()
 
         result = await db.execute(select(User).where(User.id == user_id))
@@ -62,9 +66,7 @@ class ProfileService:
         new_password = pwd_context.hash(data.new_password)
 
         await db.execute(
-            update(User)
-            .where(User.id == user_id)
-            .values(password=new_password)
+            update(User).where(User.id == user_id).values(password=new_password)
         )
         await db.flush()
 
@@ -74,12 +76,16 @@ class ProfileService:
     @staticmethod
     async def upload_avatar(file: UploadFile, user_id: int, db: AsyncSession, s3: Any):
         if not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="Invalid file type. Only images are allowed.")
+            raise HTTPException(
+                status_code=400, detail="Invalid file type. Only images are allowed."
+            )
 
         content = await file.read()
 
         if len(content) > 5 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File size exceeds the limit of 5MB.")
+            raise HTTPException(
+                status_code=400, detail="File size exceeds the limit of 5MB."
+            )
 
         ext = os.path.splitext(file.filename)[1] or ".jpg"
         filename = f"{str(uuid.uuid4())}{ext}"
@@ -92,11 +98,18 @@ class ProfileService:
             except Exception:
                 pass
 
-        s3.put_object(Bucket=settings.BUCKET_NAME, Key=filename, Body=content, ContentType=file.content_type)
+        s3.put_object(
+            Bucket=settings.BUCKET_NAME,
+            Key=filename,
+            Body=content,
+            ContentType=file.content_type,
+        )
 
         avatar_url = f"{settings.BUCKET_URL}/{settings.BUCKET_NAME}/{filename}"
 
-        await db.execute(update(User).where(User.id == user_id).values(avatar=avatar_url))
+        await db.execute(
+            update(User).where(User.id == user_id).values(avatar=avatar_url)
+        )
         await db.flush()
 
         result = await db.execute(select(User).where(User.id == user_id))

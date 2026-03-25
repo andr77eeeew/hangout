@@ -4,6 +4,7 @@ from botocore.exceptions import ClientError
 
 from app.core.config import settings
 
+
 def get_s3_client():
     return boto3.client(
         "s3",
@@ -11,8 +12,9 @@ def get_s3_client():
         aws_access_key_id=settings.BUCKET_USER,
         aws_secret_access_key=settings.BUCKET_PASSWORD,
         region_name=settings.BUCKET_REGION,
-        config=Config(signature_version='s3v4'),
+        config=Config(signature_version="s3v4"),
     )
+
 
 def ensure_bucket_exists():
     client = get_s3_client()
