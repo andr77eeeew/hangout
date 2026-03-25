@@ -1,0 +1,44 @@
+from fastapi import APIRouter, Depends, UploadFile, File
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.dependecies import get_current_user
+from app.core.storage import get_s3_client
+from app.models.user import User
+from app.schemas.user import UserResponse, UserUpdate, PasswordUpdate
+from app.services.profile import ProfileService
+
+router = APIRouter(prefix="/user", tags=["profile"])
+profile_service = ProfileService()
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+        data: UserUpdate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    return await profile_service.update_user(current_user.id, data, db)
+
+@router.patch("/password")
+async def update_password(
+        data: PasswordUpdate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    update = await profile_service.update_password(current_user.id, data, db)
+    if update:
+        return {"message": "Password updated successfully"}
+
+@router.patch("/avatar", response_model=UserResponse)
+async def update_avatar(
+        file: UploadFile = File(...),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+        s3 = get_s3_client()
+):
+    await profile_service.upload_avatar(file, current_user.id, db, s3)
