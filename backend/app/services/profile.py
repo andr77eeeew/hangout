@@ -1,3 +1,4 @@
+import os
 import uuid
 from typing import Any
 
@@ -80,7 +81,16 @@ class ProfileService:
         if len(content) > 5 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File size exceeds the limit of 5MB.")
 
-        filename = str(uuid.uuid4()) + file.filename[file.filename.rfind("."):]
+        ext = os.path.splitext(file.filename)[1] or ".jpg"
+        filename = f"{str(uuid.uuid4())}{ext}"
+        old_avatar_result = await db.execute(select(User).where(User.id == user_id))
+        old_avatar_user = old_avatar_result.scalar_one_or_none()
+        if old_avatar_user.avatar:
+            old_filename = old_avatar_user.avatar.split("/")[-1]
+            try:
+                s3.delete_object(Bucket=settings.BUCKET_NAME, Key=old_filename)
+            except Exception:
+                pass
 
         s3.put_object(Bucket=settings.BUCKET_NAME, Key=filename, Body=content, ContentType=file.content_type)
 
@@ -90,6 +100,6 @@ class ProfileService:
         await db.flush()
 
         result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
+        user = result.scalar_one()
         return user
 

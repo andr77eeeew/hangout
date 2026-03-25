@@ -39,6 +39,6 @@ async def update_avatar(
         file: UploadFile = File(...),
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
-        s3 = get_s3_client()
+        s3 = Depends(get_s3_client)
 ):
-    await profile_service.upload_avatar(file, current_user.id, db, s3)
+    return await profile_service.upload_avatar(file, current_user.id, db, s3)
