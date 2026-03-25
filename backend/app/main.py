@@ -1,7 +1,11 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-from app.api import health, auth
+from app.api import health, auth, profile
 import logging
+
+from app.core.storage import ensure_bucket_exists
 
 logging.basicConfig(
     level=logging.INFO,
@@ -9,7 +13,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(swagger_ui_parameters={"persistAuthorization": True})
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    ensure_bucket_exists()
+    yield
+app = FastAPI(swagger_ui_parameters={"persistAuthorization": True}, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +29,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(profile.router)
 
 @app.get("/")
 async def root():
