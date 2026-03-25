@@ -17,7 +17,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now())
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
     avatar: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bio: Mapped[str | None] = mapped_column(String(255), nullable=True)
