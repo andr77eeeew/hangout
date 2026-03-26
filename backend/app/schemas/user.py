@@ -53,15 +53,18 @@ class UserUpdate(BaseModel):
     bio: str | None = None
 
 
-class AvatarUpdate(BaseModel):
-    avatar: str
-
-
-class BannerUpdate(BaseModel):
-    banner: str
-
-
 class PasswordUpdate(BaseModel):
     old_password: str
     new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must be at least one capital letter is required")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must be at least one number is required")
+        return v
 
