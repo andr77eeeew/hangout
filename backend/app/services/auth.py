@@ -94,20 +94,20 @@ class AuthService:
                 token, settings.SECRET_KEY.get_secret_value(), algorithms=["HS256"]
             )
         except JWTError:
-            raise HTTPException(status_code=400, detail="Invalid refresh token")
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
         if payload.get("type") != "refresh":
-            raise HTTPException(status_code=400, detail="Invalid refresh token")
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
         sub = payload.get("sub")
         try:
             user_id = int(sub)
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="Invalid refresh token")
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
-            raise HTTPException(status_code=400, detail="Invalid refresh token")
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
         return user
 
