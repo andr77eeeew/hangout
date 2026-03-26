@@ -33,4 +33,4 @@ def ensure_bucket_exists():
         if code in {"404", "NoSuchBucket", "NotFound"}:
             client.create_bucket(Bucket=settings.BUCKET_NAME)
         else:
-            raise e
+            raise

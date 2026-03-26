@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     PRESIGNED_URL_EXPIRES_SECONDS: int = 3600
 
+    CORS_ORIGINS: list[str] | [] = []
+
 
 settings = Settings() 
 
