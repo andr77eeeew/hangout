@@ -52,6 +52,15 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     bio: str | None = None
 
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        if len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if not re.match(r"^[a-zA-Z0-9_]+$", v):
+            raise ValueError("Username must be alphanumeric, digits, or underscore")
+        return v
+
 
 class PasswordUpdate(BaseModel):
     old_password: str
