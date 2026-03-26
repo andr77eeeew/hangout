@@ -4,12 +4,12 @@ from typing import Any
 
 from fastapi import HTTPException, status, UploadFile
 from passlib.context import CryptContext
-from sqlalchemy import select, update
+from sqlalchemy import select, update, exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserUpdate, PasswordUpdate
+from app.schemas.user import UserUpdate, PasswordUpdate, UserResponse
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -74,41 +74,65 @@ class ProfileService:
         return result.scalar_one()
 
     @staticmethod
+    def _normalize_avatar_key(value: str | None) -> str | None:
+        if not value:
+            return None
+        if value.startswith("http://") or value.startswith("https://"):
+            return value.rsplit("/", 1)[1]
+        return value
+
+    @staticmethod
+    def build_avatar_url(avatar_key: str | None, s3_public_sign) -> str | None:
+        if not avatar_key:
+            return None
+        return s3_public_sign.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.BUCKET_NAME, "Key": avatar_key},
+            ExpiresIn=settings.PRESIGNED_URL_EXPIRES_SECONDS,
+        )
+
+    @staticmethod
+    def to_user_response(user: User, s3_public_sign):
+        data = UserResponse.model_validate(user).model_dump()
+        avatar_key = ProfileService._normalize_avatar_key(user.avatar)
+        data["avatar"] = ProfileService.build_avatar_url(avatar_key, s3_public_sign)
+        return UserResponse(**data)
+
+    @staticmethod
     async def upload_avatar(file: UploadFile, user_id: int, db: AsyncSession, s3: Any):
-        if not file.content_type.startswith("image/"):
+        content_type = file.content_type or ""
+        if not content_type.startswith("image/"):
             raise HTTPException(
                 status_code=400, detail="Invalid file type. Only images are allowed."
             )
 
         content = await file.read()
-
         if len(content) > 5 * 1024 * 1024:
             raise HTTPException(
                 status_code=400, detail="File size exceeds the limit of 5MB."
             )
 
-        ext = os.path.splitext(file.filename)[1] or ".jpg"
-        filename = f"{str(uuid.uuid4())}{ext}"
+        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
+        object_key = f"avatars/{str(uuid.uuid4())}{ext}"
+
         old_avatar_result = await db.execute(select(User).where(User.id == user_id))
         old_avatar_user = old_avatar_result.scalar_one_or_none()
-        if old_avatar_user.avatar:
-            old_filename = old_avatar_user.avatar.split("/")[-1]
+        old_key = ProfileService._normalize_avatar_key(old_avatar_user.avatar)
+        if old_key:
             try:
-                s3.delete_object(Bucket=settings.BUCKET_NAME, Key=old_filename)
+                s3.delete_object(Bucket=settings.BUCKET_NAME, Key=old_key)
             except Exception:
                 pass
 
         s3.put_object(
             Bucket=settings.BUCKET_NAME,
-            Key=filename,
+            Key=object_key,
             Body=content,
-            ContentType=file.content_type,
+            ContentType=content_type,
         )
 
-        avatar_url = f"{settings.BUCKET_URL}/{settings.BUCKET_NAME}/{filename}"
-
         await db.execute(
-            update(User).where(User.id == user_id).values(avatar=avatar_url)
+            update(User).where(User.id == user_id).values(avatar=object_key)
         )
         await db.flush()
 
