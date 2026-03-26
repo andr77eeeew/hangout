@@ -1,5 +1,4 @@
-from fastapi import APIRouter
-from fastapi.params import Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,4 +18,4 @@ async def health_db(db: AsyncSession = Depends(get_db)):
         await db.execute(text("SELECT 1"))
         return {"database": "connected"}
     except Exception as e:
-        return {"database": "error", "details": str(e)}
+        return HTTPException(status_code=503, detail="Database unavailable")
