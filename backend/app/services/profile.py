@@ -8,6 +8,7 @@ from passlib.context import CryptContext
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.models.user import User
@@ -54,6 +55,7 @@ class ProfileService:
         await db.execute(update(User).where(User.id == user_id).values(**update_data))
         try:
             await db.flush()
+            await db.commit()
         except IntegrityError:
             raise HTTPException(status_code=400, detail="User already exists")
         result = await db.execute(select(User).where(User.id == user_id))
@@ -76,6 +78,7 @@ class ProfileService:
             update(User).where(User.id == user_id).values(password=new_password)
         )
         await db.flush()
+        await db.commit()
 
         result = await db.execute(select(User).where(User.id == user_id))
         return result.scalar_one()
@@ -145,7 +148,8 @@ class ProfileService:
 
         old_key = ProfileService._normalize_image_key(getattr(user, field_name))
 
-        s3.put_object(
+        await run_in_threadpool(
+            s3.put_object,
             Bucket=settings.BUCKET_NAME,
             Key=object_key,
             Body=content,
@@ -159,9 +163,12 @@ class ProfileService:
                 .values(**{field_name: object_key})
             )
             await db.flush()
+            await db.commit()
         except Exception:
             try:
-                s3.delete_object(Bucket=settings.BUCKET_NAME, Key=object_key)
+                await run_in_threadpool(
+                    s3.delete_object, Bucket=settings.BUCKET_NAME, Key=object_key
+                )
             except Exception as cleanup_error:
                 logger.warning(
                     "Failed to cleanup uploaded object %s: %s",
@@ -172,7 +179,9 @@ class ProfileService:
 
         if old_key and old_key != object_key:
             try:
-                s3.delete_object(Bucket=settings.BUCKET_NAME, Key=old_key)
+                await run_in_threadpool(
+                    s3.delete_object, Bucket=settings.BUCKET_NAME, Key=old_key
+                )
             except Exception as delete_error:
                 logger.warning(
                     "Failed to delete old object %s: %s", old_key, delete_error
