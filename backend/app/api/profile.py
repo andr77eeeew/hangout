@@ -54,7 +54,7 @@ async def update_avatar(
     return profile_service.to_user_response(user, s3_public_sign)
 
 
-@router.patch("/avatar", response_model=UserResponse)
+@router.patch("/banner", response_model=UserResponse)
 async def update_banner(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
