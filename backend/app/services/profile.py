@@ -74,7 +74,7 @@ class ProfileService:
         return result.scalar_one()
 
     @staticmethod
-    def _normalize_avatar_key(value: str | None) -> str | None:
+    def _normalize_image_key(value: str | None) -> str | None:
         if not value:
             return None
         if value.startswith("http://") or value.startswith("https://"):
@@ -82,20 +82,22 @@ class ProfileService:
         return value
 
     @staticmethod
-    def build_avatar_url(avatar_key: str | None, s3_public_sign) -> str | None:
-        if not avatar_key:
+    def build_image_url(image_key: str | None, s3_public_sign) -> str | None:
+        if not image_key:
             return None
         return s3_public_sign.generate_presigned_url(
             "get_object",
-            Params={"Bucket": settings.BUCKET_NAME, "Key": avatar_key},
+            Params={"Bucket": settings.BUCKET_NAME, "Key": image_key},
             ExpiresIn=settings.PRESIGNED_URL_EXPIRES_SECONDS,
         )
 
     @staticmethod
     def to_user_response(user: User, s3_public_sign):
         data = UserResponse.model_validate(user).model_dump()
-        avatar_key = ProfileService._normalize_avatar_key(user.avatar)
-        data["avatar"] = ProfileService.build_avatar_url(avatar_key, s3_public_sign)
+        avatar_key = ProfileService._normalize_image_key(user.avatar)
+        banner_key = ProfileService._normalize_image_key(user.banner)
+        data["avatar"] = ProfileService.build_image_url(avatar_key, s3_public_sign)
+        data["banner"] = ProfileService.build_image_url(banner_key, s3_public_sign)
         return UserResponse(**data)
 
     @staticmethod
@@ -117,7 +119,7 @@ class ProfileService:
 
         old_avatar_result = await db.execute(select(User).where(User.id == user_id))
         old_avatar_user = old_avatar_result.scalar_one_or_none()
-        old_key = ProfileService._normalize_avatar_key(old_avatar_user.avatar)
+        old_key = ProfileService._normalize_image_key(old_avatar_user.avatar)
         if old_key:
             try:
                 s3.delete_object(Bucket=settings.BUCKET_NAME, Key=old_key)
@@ -133,6 +135,48 @@ class ProfileService:
 
         await db.execute(
             update(User).where(User.id == user_id).values(avatar=object_key)
+        )
+        await db.flush()
+
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one()
+        return user
+
+    @staticmethod
+    async def upload_banner(file: UploadFile, user_id: int, db: AsyncSession, s3: Any):
+        content_type = file.content_type or ""
+        if not content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400, detail="Invalid file type. Only images are allowed."
+            )
+
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400, detail="File size exceeds the limit of 10MB."
+            )
+
+        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
+        object_key = f"banners/{str(uuid.uuid4())}{ext}"
+
+        old_banner_result = await db.execute(select(User).where(User.id == user_id))
+        old_banner_user = old_banner_result.scalar_one_or_none()
+        old_key = ProfileService._normalize_image_key(old_banner_user.banner)
+        if old_key:
+            try:
+                s3.delete_object(Bucket=settings.BUCKET_NAME, Key=old_key)
+            except Exception:
+                pass
+
+        s3.put_object(
+            Bucket=settings.BUCKET_NAME,
+            Key=object_key,
+            Body=content,
+            ContentType=content_type,
+        )
+
+        await db.execute(
+            update(User).where(User.id == user_id).values(banner=object_key)
         )
         await db.flush()
 
