@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = Field(default_factory=list)
 
+    ACCESS_TTL_MINUTES: int = 30
+    REFRESH_TTL_DAYS: int = 30
+    REDIS_URL: str
 
 settings = Settings() 
 

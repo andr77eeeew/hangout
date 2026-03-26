@@ -1,6 +1,7 @@
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
@@ -24,13 +25,13 @@ def get_s3_public_sign_client():
     return _build_client(settings.BUCKET_PUBLIC_URL)
 
 
-def ensure_bucket_exists():
+async def ensure_bucket_exists():
     client = get_s3_client()
     try:
-        client.head_bucket(Bucket=settings.BUCKET_NAME)
+        await run_in_threadpool(client.head_bucket, Bucket=settings.BUCKET_NAME)
     except ClientError as e:
         code = e.response.get("Error", {}).get("Code")
         if code in {"404", "NoSuchBucket", "NotFound"}:
-            client.create_bucket(Bucket=settings.BUCKET_NAME)
+            await run_in_threadpool(client.create_bucket, Bucket=settings.BUCKET_NAME)
         else:
             raise
