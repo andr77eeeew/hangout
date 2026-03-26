@@ -17,5 +17,5 @@ async def health_db(db: AsyncSession = Depends(get_db)):
     try:
         await db.execute(text("SELECT 1"))
         return {"database": "connected"}
-    except Exception as e:
-        return HTTPException(status_code=503, detail="Database unavailable")
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database unavailable")
