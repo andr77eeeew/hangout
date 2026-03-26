@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api import health, auth, profile
 import logging
 
+from app.core.config import settings
 from app.core.storage import ensure_bucket_exists
 
 logging.basicConfig(
@@ -23,7 +24,7 @@ app = FastAPI(swagger_ui_parameters={"persistAuthorization": True}, lifespan=lif
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
