@@ -1,6 +1,9 @@
+from uuid import uuid4
+
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 
+from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
@@ -12,12 +15,10 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-ACCESS_TTL_MINUTES = 30
-REFRESH_TTL_DAYS = 30
-
 
 class AuthService:
-    async def register(self, user_data: UserCreate, db: AsyncSession):
+    @staticmethod
+    async def register(user_data: UserCreate, db: AsyncSession):
         result_email = await db.execute(
             select(User).where(User.email == user_data.email)
         )
@@ -46,12 +47,14 @@ class AuthService:
         db.add(new_user)
         try:
             await db.flush()
+            await db.commit()
         except IntegrityError:
             raise HTTPException(status_code=400, detail="User already exists")
         await db.refresh(new_user)
         return UserResponse.model_validate(new_user)
 
-    async def authenticate_user(self, email: str, password: str, db: AsyncSession):
+    @staticmethod
+    async def authenticate_user(email: str, password: str, db: AsyncSession):
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if user is None:
@@ -62,12 +65,13 @@ class AuthService:
 
         return user
 
-    def create_access_token(self, user_id: int) -> str:
+    @staticmethod
+    def create_access_token(user_id: int) -> str:
         utc_now = datetime.now(timezone.utc)
         payload = {
             "sub": str(user_id),
             "type": "access",
-            "exp": utc_now + timedelta(minutes=30),
+            "exp": utc_now + timedelta(minutes=settings.ACCESS_TTL_MINUTES),
             "iat": utc_now,
         }
 
@@ -75,39 +79,67 @@ class AuthService:
             payload, settings.SECRET_KEY.get_secret_value(), algorithm="HS256"
         )
 
-    def create_refresh_token(self, user_id: int) -> str:
+    @staticmethod
+    def create_refresh_token(user_id: int) -> tuple[str, str]:
         utc_now = datetime.now(timezone.utc)
+        jti = uuid4().hex
         payload = {
             "sub": str(user_id),
-            "exp": utc_now + timedelta(days=30),
+            "exp": utc_now + timedelta(days=settings.REFRESH_TTL_DAYS),
+            "jti": jti,
             "type": "refresh",
             "iat": utc_now,
         }
 
         return jwt.encode(
             payload, settings.SECRET_KEY.get_secret_value(), algorithm="HS256"
-        )
+        ), jti
 
-    async def verify_refresh_token(self, token: str, db: AsyncSession) -> User:
+    @staticmethod
+    async def verify_refresh_token(token: str, db: AsyncSession) -> tuple[User, str]:
+        invalid_token = HTTPException(status_code=401, detail="Invalid refresh token")
         try:
             payload = jwt.decode(
                 token, settings.SECRET_KEY.get_secret_value(), algorithms=["HS256"]
             )
         except JWTError:
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            raise invalid_token
+
         if payload.get("type") != "refresh":
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            raise invalid_token
+
+        jti = payload.get("jti")
+        if not isinstance(jti, str) or not jti:
+            raise invalid_token
 
         sub = payload.get("sub")
         try:
             user_id = int(sub)
         except (ValueError, TypeError):
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            raise invalid_token
 
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+            raise invalid_token
 
-        return user
+        return user, jti
+
+    @staticmethod
+    def _refresh_key(jti: str) -> str:
+        return f"refresh:jti{jti}"
+
+    @staticmethod
+    async def store_refresh_session(
+        redis: Redis, jti: str, user_id: int, ttl_seconds: int
+    ) -> None:
+        await redis.set(AuthService._refresh_key(jti), str(user_id), ex=ttl_seconds)
+
+    @staticmethod
+    async def is_refresh_session_active(redis: Redis, jti: str) -> bool:
+        return bool(await redis.exists(AuthService._refresh_key(jti)))
+
+    @staticmethod
+    async def revoke_refresh_session(redis: Redis, jti: str) -> None:
+        await redis.delete(AuthService._refresh_key(jti))
 

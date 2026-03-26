@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from redis.exceptions import RedisError
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.redis_client import get_redis
 from app.schemas.token import LoginRequest, TokenResponse
 from app.schemas.user import UserResponse, UserCreate
 from app.services.auth import AuthService
@@ -18,42 +21,107 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    form_data: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+    form_data: LoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ):
-    result = await auth_service.authenticate_user(
-        form_data.email, form_data.password, db
-    )
-    if result is None:
+    user = await auth_service.authenticate_user(form_data.email, form_data.password, db)
+    if user is None:
         raise HTTPException(
             status_code=401,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access = auth_service.create_access_token(result.id)
-    refresh = auth_service.create_refresh_token(result.id)
+    access_token = auth_service.create_access_token(user.id)
+    refresh_token, jti = auth_service.create_refresh_token(user.id)
+    refresh_ttl_seconds = settings.REFRESH_TTL_DAYS * 24 * 60 * 60
+
+    try:
+        await auth_service.store_refresh_session(
+            redis=redis,
+            jti=jti,
+            user_id=user.id,
+            ttl_seconds=refresh_ttl_seconds,
+        )
+    except RedisError:
+        raise HTTPException(
+            status_code=503, detail="Auth service temporarily unavailable"
+        )
+
     response.set_cookie(
         key="refresh_token",
-        value=refresh,
+        value=refresh_token,
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite="lax",
-        max_age=30 * 24 * 60 * 60,
+        max_age=refresh_ttl_seconds,
     )
-    return TokenResponse(access_token=access)
+    return TokenResponse(access_token=access_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(request: Request, db: AsyncSession = Depends(get_db)):
-    token = request.cookies.get("refresh_token")
-    if token is None:
+async def refresh(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token is None:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    user = await auth_service.verify_refresh_token(token, db)
+    try:
+        user, old_jti = await auth_service.verify_refresh_token(refresh_token, db)
+
+        if not await auth_service.is_refresh_session_active(redis, old_jti):
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+        await auth_service.revoke_refresh_session(redis, old_jti)
+        new_refresh, new_jti = auth_service.create_refresh_token(user.id)
+        refresh_ttl_seconds = settings.REFRESH_TTL_DAYS * 24 * 60 * 60
+        await auth_service.store_refresh_session(
+            redis=redis,
+            jti=new_jti,
+            user_id=user.id,
+            ttl_seconds=refresh_ttl_seconds,
+        )
+    except RedisError:
+        raise HTTPException(
+            status_code=503, detail="Auth service temporarily unavailable"
+        )
     access_token = auth_service.create_access_token(user.id)
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=refresh_ttl_seconds,
+    )
     return TokenResponse(access_token=access_token)
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+
+    token = request.cookies.get("refresh_token")
+
+    if token:
+        try:
+            _, jti = await auth_service.verify_refresh_token(token, db)
+            await auth_service.revoke_refresh_session(redis, jti)
+        except HTTPException:
+            pass
+        except RedisError:
+            raise HTTPException(
+                status_code=503, detail="Auth service temporarily unavailable"
+            )
+
     response.delete_cookie(
         key="refresh_token",
         httponly=True,
