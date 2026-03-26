@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import SecretStr
+from pydantic import SecretStr, Field
 
 
 class Settings(BaseSettings):
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     PRESIGNED_URL_EXPIRES_SECONDS: int = 3600
 
-    CORS_ORIGINS: list[str] | [] = []
+    CORS_ORIGINS: list[str] = Field(default_factory=list)
 
 
 settings = Settings() 
