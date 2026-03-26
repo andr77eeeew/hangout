@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependecies import get_current_user
 from app.models.user import User
@@ -36,7 +37,7 @@ async def login(
         key="refresh_token",
         value=refresh,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=30 * 24 * 60 * 60,
     )
@@ -58,7 +59,7 @@ async def logout(response: Response):
     response.delete_cookie(
         key="refresh_token",
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
     )
     return {"message": "Successfully logged out"}

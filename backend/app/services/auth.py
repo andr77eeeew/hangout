@@ -10,6 +10,9 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+ACCESS_TTL_MINUTES = 30
+REFRESH_TTL_DAYS = 30
+
 
 class AuthService:
     async def register(self, user_data: UserCreate, db: AsyncSession):
@@ -56,9 +59,16 @@ class AuthService:
 
     def create_access_token(self, user_id: int) -> str:
         utc_now = datetime.now(timezone.utc)
-        payload = {"sub": str(user_id), "exp": utc_now + timedelta(minutes=30)}
+        payload = {
+            "sub": str(user_id),
+            "type": "access",
+            "exp": utc_now + timedelta(minutes=30),
+            "iat": utc_now,
+        }
 
-        return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+        return jwt.encode(
+            payload, settings.SECRET_KEY.get_secret_value(), algorithm="HS256"
+        )
 
     def create_refresh_token(self, user_id: int) -> str:
         utc_now = datetime.now(timezone.utc)
@@ -66,21 +76,33 @@ class AuthService:
             "sub": str(user_id),
             "exp": utc_now + timedelta(days=30),
             "type": "refresh",
+            "iat": utc_now,
         }
 
-        return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+        return jwt.encode(
+            payload, settings.SECRET_KEY.get_secret_value(), algorithm="HS256"
+        )
 
     async def verify_refresh_token(self, token: str, db: AsyncSession) -> User:
         try:
-            refresh = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(
+                token, settings.SECRET_KEY.get_secret_value(), algorithms=["HS256"]
+            )
         except JWTError:
             raise HTTPException(status_code=400, detail="Invalid refresh token")
-        type = refresh["type"]
-        if type != "refresh":
+        if payload.get("type") != "refresh":
             raise HTTPException(status_code=400, detail="Invalid refresh token")
-        user = await db.execute(select(User).where(User.id == int(refresh["sub"])))
-        user = user.scalar_one_or_none()
-        if user is None:
+
+        sub = payload.get("sub")
+        try:
+            user_id = int(sub)
+        except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="Invalid refresh token")
+
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is None or not user.is_active:
+            raise HTTPException(status_code=400, detail="Invalid refresh token")
+
         return user
 
