@@ -1,5 +1,7 @@
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
@@ -42,7 +44,10 @@ class AuthService:
         )
 
         db.add(new_user)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            raise HTTPException(status_code=400, detail="User already exists")
         await db.refresh(new_user)
         return UserResponse.model_validate(new_user)
 
