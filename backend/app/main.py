@@ -6,6 +6,7 @@ from app.api import health, auth, profile
 import logging
 
 from app.core.config import settings
+from app.core.redis_client import redis_client
 from app.core.storage import ensure_bucket_exists
 
 logging.basicConfig(
@@ -16,11 +17,18 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    ensure_bucket_exists()
-    yield
+    await ensure_bucket_exists()
+    await redis_client.ping()
+    try:
+        yield
+    finally:
+        await redis_client.aclose()
 
 
-app = FastAPI(swagger_ui_parameters={"persistAuthorization": True}, lifespan=lifespan)
+app = FastAPI(
+    swagger_ui_parameters={"persistAuthorization": True},
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
