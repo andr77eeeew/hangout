@@ -14,6 +14,8 @@ services:
         condition: service_started
       minio:
         condition: service_started
+      redis:
+        condition: service_started
 
   mongodb:
     image: mongo:7
@@ -33,7 +35,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -49,6 +51,11 @@ services:
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
 
 volumes:
   mongo_data:
