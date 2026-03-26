@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependecies import get_current_user
+from app.core.dependencies import get_current_user
 from app.core.storage import get_s3_client, get_s3_public_sign_client
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate, PasswordUpdate

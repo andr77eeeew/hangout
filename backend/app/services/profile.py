@@ -135,7 +135,7 @@ class ProfileService:
                 status_code=400, detail=f"File size exceeds {max_size_mb}MB"
             )
 
-        ext = os.path.splittext(file.filename or "")[1] or ".jpg"
+        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
         object_key = f"{key_prefix}/{uuid.uuid4()}{ext}"
 
         result = await db.execute(select(User).where(User.id == user_id))
