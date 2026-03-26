@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     avatar: str | None = None
+    banner: str | None = None
     email: str
     bio: str | None = None
     created_at: datetime
