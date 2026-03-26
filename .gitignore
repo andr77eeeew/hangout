@@ -6,3 +6,4 @@ venv/
 .idea/
 *.log
 .DS_Store
+AGENTS.md
