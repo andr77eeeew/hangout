@@ -19,17 +19,24 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        decode = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY.get_secret_value(), algorithms=["HS256"]
+        )
     except JWTError:
         raise credentials_exception
+
+    token_type = payload.get("type")
+    if token_type != "access":
+        raise credentials_exception
+    sub = payload.get("sub")
     try:
-        user_id = int(decode.get("sub"))
+        user_id = int(sub)
         if user_id is None:
             raise credentials_exception
     except (ValueError, TypeError):
         raise credentials_exception
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
-    if user is None:
+    if user is None or not user.is_active:
         raise credentials_exception
     return user
