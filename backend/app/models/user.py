@@ -24,6 +24,7 @@ class User(Base):
     )
 
     avatar: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    banner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bio: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telegram_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     user_role: Mapped[UserRole] = mapped_column(

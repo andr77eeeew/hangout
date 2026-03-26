@@ -56,6 +56,10 @@ class AvatarUpdate(BaseModel):
     avatar: str
 
 
+class BannerUpdate(BaseModel):
+    banner: str
+
+
 class PasswordUpdate(BaseModel):
     old_password: str
     new_password: str
