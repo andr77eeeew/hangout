@@ -127,7 +127,7 @@ class AuthService:
 
     @staticmethod
     def _refresh_key(jti: str) -> str:
-        return f"refresh:jti{jti}"
+        return f"refresh:jti:{jti}"
 
     @staticmethod
     async def store_refresh_session(
