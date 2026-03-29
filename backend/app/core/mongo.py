@@ -1,28 +1,26 @@
-from fastapi import HTTPException, status
-from motor.motor_asyncio import (
-    AsyncIOMotorClient,
-    AsyncIOMotorCollection,
-    AsyncIOMotorDatabase,
-)
+from fastapi import HTTPException
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
+from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import PyMongoError
 from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 
 from app.core.config import settings
 
-_mongo_client: AsyncIOMotorClient | None = None
-_mongo_db: AsyncIOMotorDatabase | None = None
+_mongo_client: AsyncMongoClient | None = None
+_mongo_db: AsyncDatabase | None = None
 
 
 async def init_mongo() -> None:
     global _mongo_client, _mongo_db
 
-    _mongo_client = AsyncIOMotorClient(settings.MONGO_URL)
+    _mongo_client = AsyncMongoClient(settings.MONGO_URL, tz_aware=True)
     _mongo_db = _mongo_client.get_default_database()
 
     try:
         await _mongo_db.command("ping")
     except PyMongoError:
-        _mongo_client.close()
+        await _mongo_client.aclose()
         _mongo_client = None
         _mongo_db = None
         raise
@@ -32,13 +30,13 @@ async def close_mongo():
     global _mongo_client, _mongo_db
 
     if _mongo_client is not None:
-        _mongo_client.close()
+        await _mongo_client.aclose()
 
     _mongo_client = None
     _mongo_db = None
 
 
-async def get_mongo_db() -> AsyncIOMotorDatabase:
+async def get_mongo_db() -> AsyncDatabase:
     if _mongo_db is None:
         raise HTTPException(
             status_code=HTTP_503_SERVICE_UNAVAILABLE,
@@ -47,6 +45,6 @@ async def get_mongo_db() -> AsyncIOMotorDatabase:
     return _mongo_db
 
 
-async def get_activities_collection() -> AsyncIOMotorCollection:
+async def get_activities_collection() -> AsyncCollection:
     db = await get_mongo_db()
     return db["activities"]
