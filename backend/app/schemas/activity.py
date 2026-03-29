@@ -1,15 +1,18 @@
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator, BeforeValidator, Field
+
+PyObjectId = Annotated[str, BeforeValidator(str)]
 
 
-class ActivityTypes(str, Enum):
+class ActivityType(str, Enum):
     open = "open"
     closed = "closed"
 
 
-class ActivityFormats(str, Enum):
+class ActivityFormat(str, Enum):
     online = "online"
     offline = "offline"
 
@@ -24,15 +27,22 @@ class ActivityCategory(str, Enum):
     anime = "anime"
 
 
-class CreateActivity(BaseModel):
+class ActivityStatus(str, Enum):
+    active = "active"
+    completed = "completed"
+    cancelled = "canceled"
+    expired = "expired"
+
+
+class ActivityBase(BaseModel):
     title: str
-    type: ActivityTypes = ActivityTypes.open
+    type: ActivityType = ActivityType.open
+    format: ActivityFormat = ActivityFormat.online
     category: ActivityCategory
+    description: str
     date: datetime
     max_members: int
-    format: ActivityFormats = ActivityFormats.online
-    description: str
-    tags: list[str]
+    tags: list[str] = Field(default_factory=list)
     location: str | None = None
 
     @field_validator("tags")
@@ -55,57 +65,85 @@ class CreateActivity(BaseModel):
             raise ValueError("No more than 5 tags are allowed")
         return normalized
 
+    @field_validator("max_members")
+    @classmethod
+    def validate_members(cls, value: int) -> int:
+        if value < 2:
+            raise ValueError("At least 2 members are required")
+        if value > 20:
+            raise ValueError("No more than 20 members are allowed")
+        return value
+
+    @model_validator(mode="after")
+    def validate_location_for_offline(self):
+        if self.format == ActivityFormat.offline:
+            if self.location is None or not self.location.strip():
+                raise ValueError("location is required for offline activity")
+
+        if self.location is not None and not self.location.strip():
+            raise ValueError("Location must not be empty")
+
+        return self
+
+
+class ActivityCreate(ActivityBase):
     @field_validator("date")
     @classmethod
-    def validate_date(cls, value: datetime) -> datetime:
+    def validate_future_date(cls, value: datetime) -> datetime:
         if value.tzinfo is None:
             raise ValueError("date must include timezone")
         if value <= datetime.now(timezone.utc):
             raise ValueError("Date must be in the future")
         return value
 
-    @model_validator(mode="after")
-    def validate_location_for_offline(self):
-        if self.format == ActivityFormats.offline and not self.location:
-            if self.location is None or not self.location.strip():
-                raise ValueError("location is required for offline activity")
-        if self.location is not None and not self.location.strip():
-            raise ValueError("Location must not be empty")
-        return self
 
-    @field_validator("max_members")
-    @classmethod
-    def validate_members(cls, v: int) -> int:
-        if v > 20:
-            raise ValueError("No more than 20 members are allowed")
-        if v < 2:
-            raise ValueError("At least 2 members are required")
-        return v
-
-
-class ActivityResponse(BaseModel):
-    id: str
-    title: str
-    type: ActivityTypes
-    category: ActivityCategory
-    date: datetime
-    max_members: int
-    format: ActivityFormats
-    description: str
-    tags: list[str]
+class ActivityResponse(ActivityBase):
+    id: Optional[PyObjectId] = Field(alias="_id")
     creator_id: int
+    current_members: int
+    status: ActivityStatus = ActivityStatus.active
     created_at: datetime
     updated_at: datetime
-    location: str | None = None
+
+    @field_validator("date", "created_at", "updated_at", mode="before")
+    @classmethod
+    def ensure_timezone_aware(cls, value):
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_schema_extra": {
+            "example": {
+                "_id": "67e6e4b5a5c2f9a3f8de1111",
+                "title": "Играем в Minecraft сегодня вечером",
+                "type": "open | closed",
+                "format": "online | offline",
+                "category": "games | sport | movies | ...",
+                "description": "Нужен 4й игрок, играем на выживание",
+                "date": "2026-03-29T18:00:00+00:00",
+                "max_members": 10,
+                "tags": ["minecraft", "survival", "вечер"],
+                "location": None,
+                "creator_id": 1,
+                "current_members": 2,
+                "status": "active | completed | cancelled | expired",
+                "created_at": "2026-03-28T16:00:00+00:00",
+                "updated_at": "2026-03-28T16:00:00+00:00",
+            }
+        },
+    }
 
 
 class ActivityUpdate(BaseModel):
     title: str | None = None
     date: datetime | None = None
-    type: ActivityTypes | None = None
+    type: ActivityType | None = None
     category: ActivityCategory | None = None
     max_members: int | None = None
-    format: ActivityFormats | None = None
+    format: ActivityFormat | None = None
     description: str | None = None
     location: str | None = None
     tags: list[str] | None = None
@@ -158,7 +196,7 @@ class ActivityUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_location_for_offline(self):
-        if self.format == ActivityFormats.offline:
+        if self.format == ActivityFormat.offline:
             if self.location is None or not self.location.strip():
                 raise ValueError("location is required for offline activity")
         if self.location is not None and not self.location.strip():
