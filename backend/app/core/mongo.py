@@ -48,3 +48,8 @@ async def get_mongo_db() -> AsyncDatabase:
 async def get_activities_collection() -> AsyncCollection:
     db = await get_mongo_db()
     return db["activities"]
+
+
+async def get_membership_collection() -> AsyncCollection:
+    db = await get_mongo_db()
+    return db["membership"]
