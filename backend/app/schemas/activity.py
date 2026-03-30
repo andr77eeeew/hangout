@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Annotated, Optional
+from typing import Annotated
 
 from pydantic import BaseModel, field_validator, model_validator, BeforeValidator, Field
 
@@ -32,6 +32,13 @@ class ActivityStatus(str, Enum):
     completed = "completed"
     canceled = "canceled"
     expired = "expired"
+
+
+class ActivityCreatorPreview(BaseModel):
+    id: int
+    username: str
+    avatar_key: str | None = None
+    avatar_url: str | None = None
 
 
 class ActivityBase(BaseModel):
@@ -74,14 +81,23 @@ class ActivityBase(BaseModel):
             raise ValueError("No more than 20 members are allowed")
         return value
 
+    @field_validator("location", mode="before")
+    @classmethod
+    def normalize_location(cls, value):
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+
+            return cleaned or None
+
+        return value
+
     @model_validator(mode="after")
     def validate_location_for_offline(self):
-        if self.format == ActivityFormat.offline:
-            if self.location is None or not self.location.strip():
-                raise ValueError("location is required for offline activity")
-
-        if self.location is not None and not self.location.strip():
-            raise ValueError("Location must not be empty")
+        if self.format == ActivityFormat.offline and self.location is None:
+            raise ValueError("location is required for offline activity")
 
         return self
 
@@ -92,14 +108,21 @@ class ActivityCreate(ActivityBase):
     def validate_future_date(cls, value: datetime) -> datetime:
         if value.tzinfo is None:
             raise ValueError("date must include timezone")
-        if value <= datetime.now(timezone.utc):
-            raise ValueError("Date must be in the future")
+
+        value_utc = value.astimezone(timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+
+        if value_utc <= now_utc:
+            raise ValueError("Date and time must be in the future")
+
+        if value_utc - now_utc < timedelta(hours=2):
+            raise ValueError("Activity must be scheduled at least 2 hours in advance")
         return value
 
 
 class ActivityResponse(ActivityBase):
     id: PyObjectId = Field(alias="_id")
-    creator_id: int
+    creator: ActivityCreatorPreview | None = None
     current_members: int
     status: ActivityStatus = ActivityStatus.active
     created_at: datetime
@@ -185,8 +208,19 @@ class ActivityUpdate(BaseModel):
 
         if value.tzinfo is None:
             raise ValueError("date must include timezone")
-        if value <= datetime.now(timezone.utc):
-            raise ValueError("Date must be in the future")
+
+            # 2) нормализуем в UTC для корректного сравнения
+        value_utc = value.astimezone(timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+
+        # 3) активность должна быть в будущем
+        if value_utc <= now_utc:
+            raise ValueError("Date and time must be in the future")
+
+        # 4) минимальный запас до старта (2 часа)
+        if value_utc - now_utc < timedelta(hours=2):
+            raise ValueError("Activity must be scheduled at least 2 hours in advance")
+
         return value
 
     @field_validator("max_members")
@@ -200,11 +234,24 @@ class ActivityUpdate(BaseModel):
             raise ValueError("At least 2 members are required")
         return v
 
+    @field_validator("location", mode="before")
+    @classmethod
+    def normalize_location(cls, value):
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+
+            return cleaned or None
+
+        return value
+
     @model_validator(mode="after")
     def validate_location_for_offline(self):
-        if self.format == ActivityFormat.offline:
-            if self.location is None or not self.location.strip():
-                raise ValueError("location is required for offline activity")
-        if self.location is not None and not self.location.strip():
-            raise ValueError("Location must not be empty")
+        # Если в PATCH явно выставили format=offline,
+        # то location в этом payload должен быть непустым
+        if self.format == ActivityFormat.offline and self.location is None:
+            raise ValueError("location is required for offline activity")
+
         return self
