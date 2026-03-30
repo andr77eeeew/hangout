@@ -30,7 +30,7 @@ class ActivityCategory(str, Enum):
 class ActivityStatus(str, Enum):
     active = "active"
     completed = "completed"
-    cancelled = "canceled"
+    canceled = "canceled"
     expired = "expired"
 
 
@@ -98,7 +98,7 @@ class ActivityCreate(ActivityBase):
 
 
 class ActivityResponse(ActivityBase):
-    id: Optional[PyObjectId] = Field(alias="_id")
+    id: PyObjectId = Field(alias="_id")
     creator_id: int
     current_members: int
     status: ActivityStatus = ActivityStatus.active
@@ -135,6 +135,12 @@ class ActivityResponse(ActivityBase):
             }
         },
     }
+
+
+class ActivityResponseFeed(BaseModel):
+    items: list[ActivityResponse] = Field(default_factory=list)
+    next_cursor: str | None = None
+    has_more: bool
 
 
 class ActivityUpdate(BaseModel):
