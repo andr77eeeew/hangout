@@ -1,23 +1,20 @@
+import logging
 import os
 import uuid
 from typing import Any
-from urllib.parse import urlparse, unquote
 
-from fastapi import HTTPException, status, UploadFile
-from passlib.context import CryptContext
+from app.core.config import settings
+from app.core.image_utils import build_image_url, normalize_image_key
+from app.core.security import hash_password, verify_password
+from app.models.user import User
+from app.schemas.user import PasswordUpdate, UserResponse, UserUpdate
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.core.config import settings
-from app.models.user import User
-from app.schemas.user import UserUpdate, PasswordUpdate, UserResponse
-import logging
-
 logger = logging.getLogger(__name__)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class ProfileService:
@@ -63,57 +60,30 @@ class ProfileService:
 
     @staticmethod
     async def update_password(user_id: int, data: PasswordUpdate, db: AsyncSession):
-
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if not pwd_context.verify(data.old_password, user.password):
+        if not verify_password(data.old_password, user.password):
             raise HTTPException(status_code=400, detail="Old password is incorrect")
 
-        new_password = pwd_context.hash(data.new_password)
+        new_hashed = hash_password(data.new_password)
 
         await db.execute(
-            update(User).where(User.id == user_id).values(password=new_password)
+            update(User).where(User.id == user_id).values(password=new_hashed)
         )
         await db.flush()
         await db.commit()
 
-        result = await db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one()
-
-    @staticmethod
-    def _normalize_image_key(value: str | None) -> str | None:
-        if not value:
-            return None
-        if value.startswith(("http://", "https://")):
-            parsed = urlparse(value)
-            path = unquote(parsed.path.lstrip("/"))
-            bucket_prefix = f"{settings.BUCKET_NAME}/"
-            if path.startswith(bucket_prefix):
-                path = path[len(bucket_prefix) :]
-            return path or None
-        return value
-
-    @staticmethod
-    def build_image_url(image_key: str | None, s3_public_sign) -> str | None:
-        if not image_key:
-            return None
-        return s3_public_sign.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.BUCKET_NAME, "Key": image_key},
-            ExpiresIn=settings.PRESIGNED_URL_EXPIRES_SECONDS,
-        )
-
     @staticmethod
     def to_user_response(user: User, s3_public_sign):
         data = UserResponse.model_validate(user).model_dump()
-        data["avatar"] = ProfileService.build_image_url(
-            ProfileService._normalize_image_key(user.avatar), s3_public_sign
+        data["avatar"] = build_image_url(
+            normalize_image_key(user.avatar), s3_public_sign
         )
-        data["banner"] = ProfileService.build_image_url(
-            ProfileService._normalize_image_key(user.banner), s3_public_sign
+        data["banner"] = build_image_url(
+            normalize_image_key(user.banner), s3_public_sign
         )
         return UserResponse(**data)
 
@@ -146,7 +116,7 @@ class ProfileService:
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        old_key = ProfileService._normalize_image_key(getattr(user, field_name))
+        old_key = normalize_image_key(getattr(user, field_name))
 
         await run_in_threadpool(
             s3.put_object,
@@ -213,5 +183,3 @@ class ProfileService:
             key_prefix="banners",
             max_size_mb=10,
         )
-
-

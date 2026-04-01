@@ -1,17 +1,18 @@
 from datetime import datetime, timezone
+
 from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.asynchronous.collection import AsyncCollection, ReturnDocument
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.core.image_utils import build_image_url, normalize_image_key
 from app.models.user import User, UserRole
 from app.schemas.activity import (
     ActivityCreate,
     ActivityResponse,
-    ActivityStatus,
     ActivityResponseFeed,
+    ActivityStatus,
     ActivityUpdate,
 )
 
@@ -65,8 +66,8 @@ class ActivityService:
         return {
             "id": user.id,
             "username": user.username,
-            "avatar_key": ActivityService._normalize_image_key(user.avatar),
-            "avatar_url": ActivityService._build_avatar_url(
+            "avatar_key": normalize_image_key(user.avatar),
+            "avatar_url": build_image_url(
                 user.avatar, s3_public_sign
             ),
         }
@@ -81,24 +82,6 @@ class ActivityService:
         )
 
         return ActivityResponse(**doc, creator=creator)
-
-    @staticmethod
-    def _normalize_image_key(value: str | None) -> str | None:
-        if value is None:
-            return None
-
-        return value
-
-    @staticmethod
-    def _build_avatar_url(avatar_key: str | None, s3_public_sign) -> str | None:
-        if avatar_key is None:
-            return None
-
-        return s3_public_sign.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.BUCKET_NAME, "Key": avatar_key},
-            ExpiresIn=settings.PRESIGNED_URL_EXPIRES_SECONDS,
-        )
 
     @staticmethod
     async def create_activity(
@@ -132,7 +115,7 @@ class ActivityService:
         limit: int = 10,
         cursor: str | None = None,
     ) -> ActivityResponseFeed:
-        query: dict = {}
+        query: dict = {"status": ActivityStatus.active.value}
 
         if cursor:
             if not ObjectId.is_valid(cursor):

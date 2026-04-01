@@ -1,8 +1,10 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated
 
-from pydantic import BaseModel, field_validator, model_validator, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
+
+from app.schemas.validators import ValidTags
 
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
@@ -42,35 +44,15 @@ class ActivityCreatorPreview(BaseModel):
 
 
 class ActivityBase(BaseModel):
-    title: str
+    title: str = Field(min_length=3, max_length=100)
     type: ActivityType = ActivityType.open
     format: ActivityFormat = ActivityFormat.online
     category: ActivityCategory
-    description: str
+    description: str = Field(min_length=10, max_length=2000)
     date: datetime
     max_members: int
-    tags: list[str] = Field(default_factory=list)
+    tags: ValidTags = Field(default_factory=list)
     location: str | None = None
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, tags: list[str]) -> list[str]:
-        normalized: list[str] = []
-        seen: set[str] = set()
-
-        for raw in tags:
-            tag = raw.strip().lstrip("#").casefold()
-            if not tag:
-                continue
-            if tag not in seen:
-                seen.add(tag)
-                normalized.append(tag)
-
-        if not normalized:
-            raise ValueError("At least one tag is required")
-        if len(normalized) > 5:
-            raise ValueError("No more than 5 tags are allowed")
-        return normalized
 
     @field_validator("max_members")
     @classmethod
@@ -167,38 +149,15 @@ class ActivityResponseFeed(BaseModel):
 
 
 class ActivityUpdate(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, min_length=3, max_length=100)
     date: datetime | None = None
     type: ActivityType | None = None
     category: ActivityCategory | None = None
     max_members: int | None = None
     format: ActivityFormat | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, min_length=10, max_length=2000)
     location: str | None = None
-    tags: list[str] | None = None
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, tags: list[str] | None) -> list[str] | None:
-        if tags is None:
-            return None
-
-        normalized: list[str] = []
-        seen: set[str] = set()
-
-        for raw in tags:
-            tag = raw.strip().lstrip("#").casefold()
-            if not tag:
-                continue
-            if tag not in seen:
-                seen.add(tag)
-                normalized.append(tag)
-
-        if not normalized:
-            raise ValueError("At least one tag is required")
-        if len(normalized) > 5:
-            raise ValueError("No more than 5 tags are allowed")
-        return normalized
+    tags: ValidTags | None = None
 
     @field_validator("date")
     @classmethod
@@ -209,15 +168,12 @@ class ActivityUpdate(BaseModel):
         if value.tzinfo is None:
             raise ValueError("date must include timezone")
 
-            # 2) нормализуем в UTC для корректного сравнения
         value_utc = value.astimezone(timezone.utc)
         now_utc = datetime.now(timezone.utc)
 
-        # 3) активность должна быть в будущем
         if value_utc <= now_utc:
             raise ValueError("Date and time must be in the future")
 
-        # 4) минимальный запас до старта (2 часа)
         if value_utc - now_utc < timedelta(hours=2):
             raise ValueError("Activity must be scheduled at least 2 hours in advance")
 

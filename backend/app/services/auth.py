@@ -1,20 +1,17 @@
 from datetime import datetime, timedelta, timezone
-from operator import or_
 from uuid import uuid4
 
 import jwt
 from app.core.config import settings
+from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from fastapi import HTTPException, status
 from jwt.exceptions import PyJWTError
-from passlib.context import CryptContext
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
@@ -44,7 +41,7 @@ class AuthService:
         new_user = User(
             email=user_data.email,
             username=user_data.username,
-            password=pwd_context.hash(user_data.password),
+            password=hash_password(user_data.password),
         )
 
         db.add(new_user)
@@ -67,7 +64,7 @@ class AuthService:
         if user is None:
             return None
 
-        if not pwd_context.verify(password, user.password):
+        if not verify_password(password, user.password):
             return None
 
         return user
