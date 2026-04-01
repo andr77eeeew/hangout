@@ -1,7 +1,6 @@
-import re
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr
 
 from app.schemas.validators import ValidPassword, ValidUsername
 
