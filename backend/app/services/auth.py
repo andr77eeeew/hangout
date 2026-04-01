@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from operator import or_
 from uuid import uuid4
 
 import jwt
@@ -10,7 +9,7 @@ from fastapi import HTTPException, status
 from jwt.exceptions import PyJWTError
 from passlib.context import CryptContext
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
