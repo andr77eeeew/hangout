@@ -1,17 +1,18 @@
+from datetime import datetime, timedelta, timezone
+from operator import or_
 from uuid import uuid4
 
-from jose import jwt, JWTError
-from datetime import datetime, timedelta, timezone
-
-from redis.asyncio import Redis
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+import jwt
+from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from fastapi import HTTPException, status
+from jwt.exceptions import PyJWTError
 from passlib.context import CryptContext
+from redis.asyncio import Redis
 from sqlalchemy import select
-from app.core.config import settings
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -19,23 +20,25 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class AuthService:
     @staticmethod
     async def register(user_data: UserCreate, db: AsyncSession):
-        result_email = await db.execute(
-            select(User).where(User.email == user_data.email)
-        )
-        user_email = result_email.scalar_one_or_none()
-        if user_email is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
+        result = await db.execute(
+            select(User).where(
+                or_(
+                    User.email == user_data.email,
+                    User.username == user_data.username,
+                )
             )
-        result_username = await db.execute(
-            select(User).where(User.username == user_data.username)
         )
-        user_username = result_username.scalar_one_or_none()
-        if user_username is not None:
+        existing_user = result.scalar_one_or_none()
+
+        if existing_user is not None:
+            if existing_user.email == user_data.email:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email already registered",
+                )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already taken",
             )
 
         new_user = User(
@@ -49,7 +52,11 @@ class AuthService:
             await db.flush()
             await db.commit()
         except IntegrityError:
-            raise HTTPException(status_code=400, detail="User already exists")
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already exists",
+            )
         await db.refresh(new_user)
         return UserResponse.model_validate(new_user)
 
@@ -102,7 +109,7 @@ class AuthService:
             payload = jwt.decode(
                 token, settings.SECRET_KEY.get_secret_value(), algorithms=["HS256"]
             )
-        except JWTError:
+        except PyJWTError:
             raise invalid_token
 
         if payload.get("type") != "refresh":
@@ -142,4 +149,3 @@ class AuthService:
     @staticmethod
     async def revoke_refresh_session(redis: Redis, jti: str) -> None:
         await redis.delete(AuthService._refresh_key(jti))
-
