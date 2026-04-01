@@ -5,6 +5,9 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
+_s3_client = None
+_s3_public_sign_client = None
+
 
 def _build_client(endpoint_url: str):
     return boto3.client(
@@ -18,11 +21,17 @@ def _build_client(endpoint_url: str):
 
 
 def get_s3_client():
-    return _build_client(settings.BUCKET_ENDPOINT_URL)
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = _build_client(settings.BUCKET_ENDPOINT_URL)
+    return _s3_client
 
 
 def get_s3_public_sign_client():
-    return _build_client(settings.BUCKET_PUBLIC_URL)
+    global _s3_public_sign_client
+    if _s3_public_sign_client is None:
+        _s3_public_sign_client = _build_client(settings.BUCKET_PUBLIC_URL)
+    return _s3_public_sign_client
 
 
 async def ensure_bucket_exists():
