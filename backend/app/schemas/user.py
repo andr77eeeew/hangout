@@ -23,12 +23,6 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class UserInDB(BaseModel):
-    username: str
-    email: str
-    password: str
-
-
 class UserUpdate(BaseModel):
     username: ValidUsername | None = None
     email: EmailStr | None = None
