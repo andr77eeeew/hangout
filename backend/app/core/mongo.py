@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from pymongo import AsyncMongoClient
-from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 
@@ -13,6 +13,9 @@ _mongo_db: AsyncDatabase | None = None
 
 async def init_mongo() -> None:
     global _mongo_client, _mongo_db
+
+    if not settings.MONGO_URL:
+        raise RuntimeError("MONGO_URL is not configured")
 
     _mongo_client = AsyncMongoClient(settings.MONGO_URL, tz_aware=True)
     _mongo_db = _mongo_client.get_default_database()
