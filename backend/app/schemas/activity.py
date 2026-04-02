@@ -51,7 +51,7 @@ class ActivityBase(BaseModel):
     description: str = Field(min_length=10, max_length=2000)
     date: datetime
     max_members: int
-    tags: ValidTags = Field(default_factory=list)
+    tags: ValidTags
     location: str | None = None
 
     @field_validator("max_members")
@@ -205,8 +205,9 @@ class ActivityUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_location_for_offline(self):
-        # Если в PATCH явно выставили format=offline,
-        # то location в этом payload должен быть непустым
+        # ВНИМАНИЕ: эта валидация проверяет только текущий payload.
+        # Если format=offline приходит без location, и в БД location уже null —
+        # итоговый документ будет невалидным. Полная валидация должна быть на уровне сервиса.
         if self.format == ActivityFormat.offline and self.location is None:
             raise ValueError("location is required for offline activity")
 

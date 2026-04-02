@@ -46,6 +46,10 @@ class ActivityService:
 
     @staticmethod
     async def _fetch_users_map(user_ids: set[int], db: AsyncSession) -> dict[int, User]:
+        """
+        Загружает пользователей одним батч-запросом.
+        Всегда передавай все нужные IDs сразу, не вызывай в цикле!
+        """
         if not user_ids:
             return {}
 
@@ -67,9 +71,7 @@ class ActivityService:
             "id": user.id,
             "username": user.username,
             "avatar_key": normalize_image_key(user.avatar),
-            "avatar_url": build_image_url(
-                user.avatar, s3_public_sign
-            ),
+            "avatar_url": build_image_url(user.avatar, s3_public_sign),
         }
 
     @staticmethod
@@ -205,4 +207,3 @@ class ActivityService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
             )
-        return 
