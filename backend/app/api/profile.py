@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, File, UploadFile
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.redis_client import get_redis
 from app.core.storage import get_s3_client, get_s3_public_sign_client
 from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserResponse, UserUpdate
@@ -36,8 +38,9 @@ async def update_password(
     data: PasswordUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ):
-    await profile_service.update_password(current_user.id, data, db)
+    await profile_service.update_password(current_user.id, data, db, redis)
     return {"message": "Password updated successfully"}
 
 
