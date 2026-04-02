@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
-from redis.exceptions import RedisError
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.schemas.token import LoginRequest, TokenResponse
-from app.schemas.user import UserResponse, UserCreate
+from app.schemas.user import UserCreate, UserResponse
 from app.services.auth import AuthService
 
 router = APIRouter(prefix="/user", tags=["auth"])
@@ -35,7 +35,7 @@ async def login(
         )
     access_token = auth_service.create_access_token(user.id)
     refresh_token, jti = auth_service.create_refresh_token(user.id)
-    refresh_ttl_seconds = settings.REFRESH_TTL_DAYS * 24 * 60 * 60
+    refresh_ttl_seconds = settings.refresh_ttl_seconds
 
     try:
         await auth_service.store_refresh_session(
@@ -73,12 +73,11 @@ async def refresh(
     try:
         user, old_jti = await auth_service.verify_refresh_token(refresh_token, db)
 
-        if not await auth_service.is_refresh_session_active(redis, old_jti):
+        if not await auth_service.consume_refresh_session(redis, old_jti):
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-        await auth_service.revoke_refresh_session(redis, old_jti)
         new_refresh, new_jti = auth_service.create_refresh_token(user.id)
-        refresh_ttl_seconds = settings.REFRESH_TTL_DAYS * 24 * 60 * 60
+        refresh_ttl_seconds = settings.refresh_ttl_seconds
         await auth_service.store_refresh_session(
             redis=redis,
             jti=new_jti,

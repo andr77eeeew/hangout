@@ -2,10 +2,6 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import jwt
-from app.core.config import settings
-from app.core.security import hash_password, verify_password
-from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
 from fastapi import HTTPException, status
 from jwt.exceptions import PyJWTError
 from redis.asyncio import Redis
@@ -13,49 +9,33 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.security import hash_password, verify_password
+from app.models.user import User
+from app.schemas.user import UserCreate, UserResponse
+
 
 class AuthService:
     @staticmethod
     async def register(user_data: UserCreate, db: AsyncSession):
-        result = await db.execute(
-            select(User).where(
-                or_(
-                    User.email == user_data.email,
-                    User.username == user_data.username,
-                )
-            )
-        )
-        existing_user = result.scalar_one_or_none()
-
-        if existing_user is not None:
-            if existing_user.email == user_data.email:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Email already registered",
-                )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Username already taken",
-            )
-
         new_user = User(
             email=user_data.email,
             username=user_data.username,
             password=hash_password(user_data.password),
         )
-
         db.add(new_user)
         try:
             await db.flush()
             await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists",
-            )
-        await db.refresh(new_user)
-        return UserResponse.model_validate(new_user)
+            await db.refresh(new_user)
+            return UserResponse.model_validate(new_user)
+        except IntegrityError as e:
+            error_str = str(e.orig).lower()
+            if "email" in error_str:
+                raise HTTPException(status_code=409, detail="Email already registered")
+            if "username" in error_str:
+                raise HTTPException(status_code=409, detail="Username already taken")
+            raise HTTPException(status_code=409, detail="User already exists")
 
     @staticmethod
     async def authenticate_user(email: str, password: str, db: AsyncSession):
@@ -137,12 +117,33 @@ class AuthService:
     async def store_refresh_session(
         redis: Redis, jti: str, user_id: int, ttl_seconds: int
     ) -> None:
-        await redis.set(AuthService._refresh_key(jti), str(user_id), ex=ttl_seconds)
+        key = AuthService._refresh_key(jti)
+        user_session_key = f"user_sessions:{user_id}"
+
+        async with redis.pipeline() as pipe:
+            pipe.set(key, str(user_id), ex=ttl_seconds)
+            pipe.sadd(user_session_key, jti)
+            pipe.expire(user_session_key, ttl_seconds)
+            await pipe.execute()
 
     @staticmethod
-    async def is_refresh_session_active(redis: Redis, jti: str) -> bool:
-        return bool(await redis.exists(AuthService._refresh_key(jti)))
+    async def revoke_all_user_sessions(redis: Redis, user_id: int) -> None:
+        user_session_key = f"user_sessions:{user_id}"
+        jtis = await redis.smembers(user_session_key)
+        if jtis:
+            keys = [AuthService._refresh_key(jti) for jti in jtis]
+            await redis.delete(*keys)
+        await redis.delete(user_session_key)
 
     @staticmethod
     async def revoke_refresh_session(redis: Redis, jti: str) -> None:
         await redis.delete(AuthService._refresh_key(jti))
+
+    @staticmethod
+    async def consume_refresh_session(redis: Redis, jti: str) -> bool:
+        key = AuthService._refresh_key(jti)
+        user_id_str = await redis.getdel(key)
+        if user_id_str is None:
+            return False
+        await redis.srem(f"user_sessions:{user_id_str}", jti)
+        return True
