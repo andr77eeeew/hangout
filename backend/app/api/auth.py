@@ -10,7 +10,7 @@ from app.schemas.token import LoginRequest, TokenResponse
 from app.schemas.user import UserCreate, UserResponse
 from app.services.auth import AuthService
 
-router = APIRouter(prefix="/user", tags=["auth"])
+router = APIRouter(prefix="/user", tags=["🔐 Authorization"])
 auth_service = AuthService()
 
 

@@ -10,7 +10,7 @@ from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserResponse, UserUpdate
 from app.services.profile import ProfileService
 
-router = APIRouter(prefix="/user", tags=["profile"])
+router = APIRouter(prefix="/user", tags=["🥸 Profile"])
 profile_service = ProfileService()
 
 
