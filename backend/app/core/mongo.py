@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from pymongo import AsyncMongoClient
+from pymongo import ASCENDING, AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
@@ -56,3 +56,10 @@ async def get_activities_collection() -> AsyncCollection:
 async def get_membership_collection() -> AsyncCollection:
     db = await get_mongo_db()
     return db["membership"]
+
+
+async def get_game_covers_collection() -> AsyncCollection:
+    db = await get_mongo_db()
+    collection = db["game_covers"]
+    await collection.create_index([("game_id", ASCENDING)], unique=True)
+    return collection
