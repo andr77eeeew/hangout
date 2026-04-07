@@ -14,6 +14,8 @@ from app.schemas.activity import (
     ActivityResponseFeed,
     ActivityStatus,
     ActivityUpdate,
+    ActivityCategory,
+    CoverStatus,
 )
 
 
@@ -83,6 +85,13 @@ class ActivityService:
             users_map.get(doc["creator_id"]), s3_public_sign
         )
 
+        if doc.get("category") == ActivityCategory.games.value:
+            extra = doc.get("extra_data", {})
+            if extra.get("cover_status") == CoverStatus.ready.value and extra.get("cover_key"):
+                extra["cover_url"] = build_image_url(extra["cover_key"], s3_public_sign)
+            else:
+                extra["cover_url"] = None
+
         return ActivityResponse(**doc, creator=creator)
 
     @staticmethod
@@ -102,7 +111,19 @@ class ActivityService:
         activity_dict["created_at"] = now
         activity_dict["updated_at"] = now
 
+        if activity_dict.get("category") == ActivityCategory.games.value:
+            if "extra_data" in activity_dict:
+                activity_dict["extra_data"]["cover_status"] = CoverStatus.pending.value
+
         result = await collection.insert_one(activity_dict)
+        
+        if activity_dict.get("category") == ActivityCategory.games.value:
+            extra = activity_dict.get("extra_data", {})
+            game_name = extra.get("game_name")
+            if game_name:
+                from app.tasks.rawg import fetch_game_cover
+                fetch_game_cover.delay(str(result.inserted_id), game_name)
+
         created_activity = await collection.find_one({"_id": result.inserted_id})
 
         return await ActivityService._to_activity_response(
