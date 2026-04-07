@@ -16,6 +16,25 @@ services:
         condition: service_started
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_started
+
+  celery_worker:
+    build: ./backend
+    command: celery -A app.core.celery_config.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
 
   mongodb:
     image: mongo:7
@@ -57,7 +76,19 @@ services:
     ports:
       - "6379:6379"
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"   # RabbitMQ API
+      - "15672:15672" # RabbitMQ Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
 volumes:
   mongo_data:
   postgres_data:
   minio_data:
+  rabbitmq_data:
