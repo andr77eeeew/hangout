@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     REFRESH_TTL_DAYS: int = 30
     REDIS_URL: str
 
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+
+    RAWG_API_KEY: str | None = None
+
     @property
     def refresh_ttl_seconds(self) -> int:
         return self.REFRESH_TTL_DAYS * 24 * 60 * 60
