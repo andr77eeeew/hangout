@@ -3,20 +3,21 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.asynchronous.collection import AsyncCollection, ReturnDocument
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.image_utils import build_image_url, normalize_image_key
 from app.models.user import User, UserRole
 from app.schemas.activity import (
+    ActivityCategory,
     ActivityCreate,
     ActivityResponse,
     ActivityResponseFeed,
     ActivityStatus,
     ActivityUpdate,
-    ActivityCategory,
     CoverStatus,
 )
+from app.services.tag import TagService
 
 
 class ActivityService:
@@ -87,7 +88,9 @@ class ActivityService:
 
         if doc.get("category") == ActivityCategory.games.value:
             extra = doc.get("extra_data", {})
-            if extra.get("cover_status") == CoverStatus.ready.value and extra.get("cover_key"):
+            if extra.get("cover_status") == CoverStatus.ready.value and extra.get(
+                "cover_key"
+            ):
                 extra["cover_url"] = build_image_url(extra["cover_key"], s3_public_sign)
             else:
                 extra["cover_url"] = None
@@ -104,6 +107,8 @@ class ActivityService:
     ) -> ActivityResponse:
         now = datetime.now(timezone.utc)
 
+        await TagService.get_or_create_tags(db, activity_data.tags)
+
         activity_dict = activity_data.model_dump()
         activity_dict["creator_id"] = creator_id
         activity_dict["current_members"] = 1
@@ -116,12 +121,20 @@ class ActivityService:
                 activity_dict["extra_data"]["cover_status"] = CoverStatus.pending.value
 
         result = await collection.insert_one(activity_dict)
-        
+
+        await db.execute(
+            update(User)
+            .where(User.id == creator_id)
+            .values(created_activities_count=User.created_activities_count + 1)
+        )
+        await db.commit()
+
         if activity_dict.get("category") == ActivityCategory.games.value:
             extra = activity_dict.get("extra_data", {})
             game_name = extra.get("game_name")
             if game_name:
                 from app.tasks.rawg import fetch_game_cover
+
                 fetch_game_cover.delay(str(result.inserted_id), game_name)
 
         created_activity = await collection.find_one({"_id": result.inserted_id})
