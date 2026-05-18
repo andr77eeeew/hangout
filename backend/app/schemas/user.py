@@ -11,6 +11,13 @@ class UserCreate(BaseModel):
     password: ValidPassword
 
 
+class TagResponse(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 class UserResponse(BaseModel):
     id: int
     username: str
@@ -19,6 +26,8 @@ class UserResponse(BaseModel):
     email: str
     bio: str | None = None
     created_at: datetime
+
+    favorite_tags: list[TagResponse] = []
 
     model_config = {"from_attributes": True}
 

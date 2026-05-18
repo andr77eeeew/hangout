@@ -9,6 +9,7 @@ from app.core.storage import get_s3_client, get_s3_public_sign_client
 from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserResponse, UserUpdate
 from app.services.profile import ProfileService
+from app.services.tag import TagService
 
 router = APIRouter(prefix="/user", tags=["🥸 Profile"])
 profile_service = ProfileService()
@@ -66,3 +67,12 @@ async def update_banner(
 ):
     user = await profile_service.upload_banner(file, current_user.id, db, s3)
     return profile_service.to_user_response(user, s3_public_sign)
+
+
+@router.post("/tags/{tag_name}/favorite", summary="Add/Delete tag favorite")
+async def toggle_favorite_tag(
+    tag_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await TagService.tag_toggle(tag_name, db, current_user)

@@ -1,12 +1,12 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-from app.api import health, auth, profile, activity
-import logging
 
+from app.api import activity, auth, games, health, profile
 from app.core.config import settings
-from app.core.mongo import init_mongo, close_mongo
+from app.core.mongo import close_mongo, init_mongo
 from app.core.redis_client import redis_client
 from app.core.storage import ensure_bucket_exists
 
@@ -45,6 +45,7 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(activity.router)
+app.include_router(games.router)
 
 
 @app.get("/")

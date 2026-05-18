@@ -4,6 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -37,7 +38,10 @@ async def get_current_user(
         user_id = int(sub)
     except (TypeError, ValueError):
         raise credentials_exception
-    result = await db.execute(select(User).where(User.id == user_id))
+    stmt = (
+        select(User).options(selectinload(User.favorite_tags)).where(User.id == user_id)
+    )
+    result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
