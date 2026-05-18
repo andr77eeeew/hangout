@@ -8,4 +8,14 @@ venv/
 .DS_Store
 AGENTS.md
 run_test.py
-.pytest_cache
+.pytest_cache/
+!/INSTALL.md
+/PLAN.md
+/CLAUDE.md
+/.mcp.json
+/.claude/
+/.claude/skills/business-context/user-flows.md
+/INSTALL.md
+/backend/.claude/settings.local.json
+/backend/.claude/settings.json
+/backend/.claude/hooks/context-timeline.py
