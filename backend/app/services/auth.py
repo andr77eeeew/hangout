@@ -2,10 +2,10 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import jwt
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from jwt.exceptions import PyJWTError
 from redis.asyncio import Redis
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 

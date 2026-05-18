@@ -13,9 +13,11 @@ async def test_register_success(async_client, mock_db):
     }
 
     from datetime import datetime, timezone
+
     async def mock_refresh(obj):
         obj.id = 1
         obj.created_at = datetime.now(timezone.utc)
+
     mock_db.refresh.side_effect = mock_refresh
     mock_db.commit.return_value = None  # Мокаем успешный коммит
 
@@ -90,24 +92,30 @@ async def test_logout(async_client, mock_redis):
     assert response.json()["message"] == "Successfully logged out"
     assert not response.cookies.get("refresh_token")
 
+
 async def test_refresh_success(async_client, mock_redis, mock_db):
     async_client.cookies.set("refresh_token", "fake-refresh-token")
-    
-    with patch(
-        "app.services.auth.AuthService.verify_refresh_token",
-        return_value=(User(id=1), "old_jti"),
-    ), patch(
-        "app.services.auth.AuthService.consume_refresh_session",
-        return_value=True,
-    ), patch(
-        "app.services.auth.AuthService.store_refresh_session",
-        return_value=None,
+
+    with (
+        patch(
+            "app.services.auth.AuthService.verify_refresh_token",
+            return_value=(User(id=1), "old_jti"),
+        ),
+        patch(
+            "app.services.auth.AuthService.consume_refresh_session",
+            return_value=True,
+        ),
+        patch(
+            "app.services.auth.AuthService.store_refresh_session",
+            return_value=None,
+        ),
     ):
         response = await async_client.post("/user/refresh")
 
     assert response.status_code == 200
     assert "access_token" in response.json()
     assert "refresh_token" in response.cookies
+
 
 async def test_refresh_no_cookie(async_client):
     response = await async_client.post("/user/refresh")

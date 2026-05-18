@@ -28,7 +28,6 @@ def mock_db():
     mock = AsyncMock()
     mock.add = MagicMock()
     return mock
-    
 
 
 @pytest.fixture
@@ -63,6 +62,7 @@ def mock_s3_sign():
 @pytest.fixture
 def mock_user():
     from datetime import datetime, timezone
+
     return User(
         id=1,
         email="test@user.com",
@@ -71,7 +71,7 @@ def mock_user():
         password="hashed_password",
         avatar="avatars/test.jpg",
         banner=None,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
     )
 
 

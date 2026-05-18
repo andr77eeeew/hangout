@@ -1,7 +1,7 @@
 import re
 from typing import Annotated
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator
 
 
 def _validate_password(value: str) -> str:

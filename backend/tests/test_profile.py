@@ -44,40 +44,68 @@ async def test_update_me_nothing_to_update(async_client):
     assert response.status_code == 400
     assert response.json()["detail"] == "Nothing to Update"
 
+
 async def test_update_password(async_client, mock_db, mock_user):
-    payload = {"old_password": "OldPassword123!", "new_password": "NewPassword123!", "confirm_password": "NewPassword123!"}
+    payload = {
+        "old_password": "OldPassword123!",
+        "new_password": "NewPassword123!",
+        "confirm_password": "NewPassword123!",
+    }
     from unittest.mock import patch
+
     with patch("app.services.profile.ProfileService.update_password") as mock_update:
         mock_update.return_value = None
         response = await async_client.patch("/user/password", json=payload)
-        
+
     assert response.status_code == 200
     assert response.json()["message"] == "Password updated successfully"
 
+
 async def test_update_avatar(async_client, mock_db):
     from unittest.mock import patch
+
     files = {"file": ("avatar.jpg", b"fake image content", "image/jpeg")}
     with patch("app.services.profile.ProfileService.upload_avatar") as mock_upload:
         fake_user = MagicMock()
         mock_upload.return_value = fake_user
-        
+
         with patch("app.services.profile.ProfileService.to_user_response") as mock_resp:
-            mock_resp.return_value = {"id": 1, "email": "test@mail.com", "username": "testuser", "bio": None, "links": {}, "avatar": "http://fake-s3/avatar.jpg", "banner": None, "created_at": "2026-04-01T12:00:00Z"}
+            mock_resp.return_value = {
+                "id": 1,
+                "email": "test@mail.com",
+                "username": "testuser",
+                "bio": None,
+                "links": {},
+                "avatar": "http://fake-s3/avatar.jpg",
+                "banner": None,
+                "created_at": "2026-04-01T12:00:00Z",
+            }
             response = await async_client.patch("/user/avatar", files=files)
-            
+
     assert response.status_code == 200
     assert response.json()["avatar"] == "http://fake-s3/avatar.jpg"
 
+
 async def test_update_banner(async_client, mock_db):
     from unittest.mock import patch
+
     files = {"file": ("banner.jpg", b"fake image content", "image/jpeg")}
     with patch("app.services.profile.ProfileService.upload_banner") as mock_upload:
         fake_user = MagicMock()
         mock_upload.return_value = fake_user
-        
+
         with patch("app.services.profile.ProfileService.to_user_response") as mock_resp:
-            mock_resp.return_value = {"id": 1, "email": "test@mail.com", "username": "testuser", "bio": None, "links": {}, "avatar": None, "banner": "http://fake-s3/banner.jpg", "created_at": "2026-04-01T12:00:00Z"}
+            mock_resp.return_value = {
+                "id": 1,
+                "email": "test@mail.com",
+                "username": "testuser",
+                "bio": None,
+                "links": {},
+                "avatar": None,
+                "banner": "http://fake-s3/banner.jpg",
+                "created_at": "2026-04-01T12:00:00Z",
+            }
             response = await async_client.patch("/user/banner", files=files)
-            
+
     assert response.status_code == 200
     assert response.json()["banner"] == "http://fake-s3/banner.jpg"
