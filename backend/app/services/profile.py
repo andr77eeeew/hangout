@@ -1,23 +1,23 @@
+import logging
 import os
 import uuid
-from typing import Any
-from urllib.parse import urlparse, unquote
 
-from fastapi import HTTPException, status, UploadFile
-from passlib.context import CryptContext
+
+from fastapi import HTTPException, UploadFile, status
+from redis.asyncio import Redis
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.core.image_utils import build_image_url, normalize_image_key
+from app.core.security import hash_password, verify_password
 from app.models.user import User
-from app.schemas.user import UserUpdate, PasswordUpdate, UserResponse
-import logging
+from app.schemas.user import PasswordUpdate, UserResponse, UserUpdate
+from app.services.auth import AuthService
 
 logger = logging.getLogger(__name__)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class ProfileService:
@@ -62,58 +62,35 @@ class ProfileService:
         return result.scalar_one()
 
     @staticmethod
-    async def update_password(user_id: int, data: PasswordUpdate, db: AsyncSession):
-
+    async def update_password(
+        user_id: int, data: PasswordUpdate, db: AsyncSession, redis: Redis
+    ):
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if not pwd_context.verify(data.old_password, user.password):
+        if not verify_password(data.old_password, user.password):
             raise HTTPException(status_code=400, detail="Old password is incorrect")
 
-        new_password = pwd_context.hash(data.new_password)
+        new_hashed = hash_password(data.new_password)
 
         await db.execute(
-            update(User).where(User.id == user_id).values(password=new_password)
+            update(User).where(User.id == user_id).values(password=new_hashed)
         )
         await db.flush()
         await db.commit()
 
-        result = await db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one()
+        await AuthService.revoke_all_user_sessions(redis, user_id)
 
     @staticmethod
-    def _normalize_image_key(value: str | None) -> str | None:
-        if not value:
-            return None
-        if value.startswith(("http://", "https://")):
-            parsed = urlparse(value)
-            path = unquote(parsed.path.lstrip("/"))
-            bucket_prefix = f"{settings.BUCKET_NAME}/"
-            if path.startswith(bucket_prefix):
-                path = path[len(bucket_prefix) :]
-            return path or None
-        return value
-
-    @staticmethod
-    def build_image_url(image_key: str | None, s3_public_sign) -> str | None:
-        if not image_key:
-            return None
-        return s3_public_sign.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.BUCKET_NAME, "Key": image_key},
-            ExpiresIn=settings.PRESIGNED_URL_EXPIRES_SECONDS,
-        )
-
-    @staticmethod
-    def to_user_response(user: User, s3_public_sign):
+    def to_user_response(user: User, s3_public_sign) -> UserResponse:
         data = UserResponse.model_validate(user).model_dump()
-        data["avatar"] = ProfileService.build_image_url(
-            ProfileService._normalize_image_key(user.avatar), s3_public_sign
+        data["avatar"] = build_image_url(
+            normalize_image_key(user.avatar), s3_public_sign
         )
-        data["banner"] = ProfileService.build_image_url(
-            ProfileService._normalize_image_key(user.banner), s3_public_sign
+        data["banner"] = build_image_url(
+            normalize_image_key(user.banner), s3_public_sign
         )
         return UserResponse(**data)
 
@@ -123,14 +100,25 @@ class ProfileService:
         file: UploadFile,
         user_id: int,
         db: AsyncSession,
-        s3: Any,
+        s3: object,
         field_name: str,
         key_prefix: str,
         max_size_mb: int,
     ) -> User:
+        ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
         content_type = file.content_type or ""
         if not content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Only image files are allowed")
+
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file extension. Allowed: {
+                    ',.'.join(ALLOWED_IMAGE_EXTENSIONS)
+                }",
+            )
 
         content = await file.read()
         if len(content) > max_size_mb * 1024 * 1024:
@@ -138,60 +126,61 @@ class ProfileService:
                 status_code=400, detail=f"File size exceeds {max_size_mb}MB"
             )
 
-        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
         object_key = f"{key_prefix}/{uuid.uuid4()}{ext}"
-
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        old_key = ProfileService._normalize_image_key(getattr(user, field_name))
+        old_key = normalize_image_key(user.avatar if field_name == "avatar" else user.banner)
 
-        await run_in_threadpool(
-            s3.put_object,
-            Bucket=settings.BUCKET_NAME,
-            Key=object_key,
-            Body=content,
-            ContentType=content_type,
+        await db.execute(
+            update(User).where(User.id == user_id).values(**{field_name: object_key})
         )
-
         try:
-            await db.execute(
-                update(User)
-                .where(User.id == user_id)
-                .values(**{field_name: object_key})
-            )
             await db.flush()
             await db.commit()
         except Exception:
-            try:
-                await run_in_threadpool(
-                    s3.delete_object, Bucket=settings.BUCKET_NAME, Key=object_key
-                )
-            except Exception as cleanup_error:
-                logger.warning(
-                    "Failed to cleanup uploaded object %s: %s",
-                    object_key,
-                    cleanup_error,
-                )
-            raise
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to update user profile")
+        try:
+            await run_in_threadpool(
+                s3.put_object,
+                Bucket=settings.BUCKET_NAME,
+                Key=object_key,
+                Body=content,
+                ContentType=content_type,
+            )
 
-        if old_key and old_key != object_key:
+            if old_key and old_key != object_key:
+                try:
+                    await run_in_threadpool(
+                        s3.delete_object, Bucket=settings.BUCKET_NAME, Key=old_key
+                    )
+                except Exception as delete_error:
+                    logger.warning(
+                        "Failed to delete old object %s: %s", old_key, delete_error
+                    )
+        except Exception as s3_error:
+            logger.error("S3 upload failed: %s", s3_error)
             try:
-                await run_in_threadpool(
-                    s3.delete_object, Bucket=settings.BUCKET_NAME, Key=old_key
+                await db.execute(
+                    update(User)
+                    .where(User.id == user_id)
+                    .values(**{field_name: old_key})
                 )
-            except Exception as delete_error:
-                logger.warning(
-                    "Failed to delete old object %s: %s", old_key, delete_error
-                )
+                await db.commit()
+            except Exception as rollback_error:
+                logger.error("Failed to rollback DB after S3 error: %s", rollback_error)
+            raise HTTPException(
+                status_code=503, detail="File upload service unavailable"
+            )
 
         result = await db.execute(select(User).where(User.id == user_id))
         return result.scalar_one()
 
     @staticmethod
-    async def upload_avatar(file: UploadFile, user_id: int, db: AsyncSession, s3: Any):
+    async def upload_avatar(file: UploadFile, user_id: int, db: AsyncSession, s3: object):
         return await ProfileService._upload_user_image(
             file=file,
             user_id=user_id,
@@ -203,7 +192,7 @@ class ProfileService:
         )
 
     @staticmethod
-    async def upload_banner(file: UploadFile, user_id: int, db: AsyncSession, s3: Any):
+    async def upload_banner(file: UploadFile, user_id: int, db: AsyncSession, s3: object):
         return await ProfileService._upload_user_image(
             file=file,
             user_id=user_id,
@@ -213,5 +202,3 @@ class ProfileService:
             key_prefix="banners",
             max_size_mb=10,
         )
-
-

@@ -1,9 +1,14 @@
-from enum import Enum
-
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, func, DateTime
 from datetime import datetime
+from enum import Enum
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.tags import Tag
 
 
 class UserRole(str, Enum):
@@ -29,4 +34,12 @@ class User(Base):
     telegram_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     user_role: Mapped[UserRole] = mapped_column(
         default=UserRole.client, server_default="client"
+    )
+
+    favorite_tags: Mapped[list["Tag"]] = relationship(
+        "Tag", secondary="user_tags", lazy="selectin"
+    )
+
+    created_activities_count: Mapped[int] = mapped_column(
+        default=0, nullable=False, server_default="0"
     )

@@ -1,57 +1,41 @@
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from jose import jwt, JWTError
-from datetime import datetime, timedelta, timezone
-
+import jwt
+from fastapi import HTTPException
+from jwt.exceptions import PyJWTError
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
-from fastapi import HTTPException, status
-from passlib.context import CryptContext
-from sqlalchemy import select
-from app.core.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
     @staticmethod
     async def register(user_data: UserCreate, db: AsyncSession):
-        result_email = await db.execute(
-            select(User).where(User.email == user_data.email)
-        )
-        user_email = result_email.scalar_one_or_none()
-        if user_email is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
-            )
-        result_username = await db.execute(
-            select(User).where(User.username == user_data.username)
-        )
-        user_username = result_username.scalar_one_or_none()
-        if user_username is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered",
-            )
-
         new_user = User(
             email=user_data.email,
             username=user_data.username,
-            password=pwd_context.hash(user_data.password),
+            password=hash_password(user_data.password),
         )
-
         db.add(new_user)
         try:
             await db.flush()
             await db.commit()
-        except IntegrityError:
-            raise HTTPException(status_code=400, detail="User already exists")
-        await db.refresh(new_user)
-        return UserResponse.model_validate(new_user)
+            await db.refresh(new_user)
+            return UserResponse.model_validate(new_user)
+        except IntegrityError as e:
+            error_str = str(e.orig).lower()
+            if "email" in error_str:
+                raise HTTPException(status_code=409, detail="Email already registered")
+            if "username" in error_str:
+                raise HTTPException(status_code=409, detail="Username already taken")
+            raise HTTPException(status_code=409, detail="User already exists")
 
     @staticmethod
     async def authenticate_user(email: str, password: str, db: AsyncSession):
@@ -60,7 +44,7 @@ class AuthService:
         if user is None:
             return None
 
-        if not pwd_context.verify(password, user.password):
+        if not verify_password(password, user.password):
             return None
 
         return user
@@ -102,7 +86,7 @@ class AuthService:
             payload = jwt.decode(
                 token, settings.SECRET_KEY.get_secret_value(), algorithms=["HS256"]
             )
-        except JWTError:
+        except PyJWTError:
             raise invalid_token
 
         if payload.get("type") != "refresh":
@@ -127,19 +111,39 @@ class AuthService:
 
     @staticmethod
     def _refresh_key(jti: str) -> str:
-        return f"refresh:jti{jti}"
+        return f"refresh:jti:{jti}"
 
     @staticmethod
     async def store_refresh_session(
         redis: Redis, jti: str, user_id: int, ttl_seconds: int
     ) -> None:
-        await redis.set(AuthService._refresh_key(jti), str(user_id), ex=ttl_seconds)
+        key = AuthService._refresh_key(jti)
+        user_session_key = f"user_sessions:{user_id}"
+
+        async with redis.pipeline() as pipe:
+            pipe.set(key, str(user_id), ex=ttl_seconds)
+            pipe.sadd(user_session_key, jti)
+            pipe.expire(user_session_key, ttl_seconds)
+            await pipe.execute()
 
     @staticmethod
-    async def is_refresh_session_active(redis: Redis, jti: str) -> bool:
-        return bool(await redis.exists(AuthService._refresh_key(jti)))
+    async def revoke_all_user_sessions(redis: Redis, user_id: int) -> None:
+        user_session_key = f"user_sessions:{user_id}"
+        jtis = await redis.smembers(user_session_key)
+        if jtis:
+            keys = [AuthService._refresh_key(jti) for jti in jtis]
+            await redis.delete(*keys)
+        await redis.delete(user_session_key)
 
     @staticmethod
     async def revoke_refresh_session(redis: Redis, jti: str) -> None:
         await redis.delete(AuthService._refresh_key(jti))
 
+    @staticmethod
+    async def consume_refresh_session(redis: Redis, jti: str) -> bool:
+        key = AuthService._refresh_key(jti)
+        user_id_str = await redis.getdel(key)
+        if user_id_str is None:
+            return False
+        await redis.srem(f"user_sessions:{user_id_str}", jti)
+        return True

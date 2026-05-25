@@ -1,5 +1,5 @@
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import SecretStr, Field
 
 
 class Settings(BaseSettings):
@@ -29,5 +29,14 @@ class Settings(BaseSettings):
     REFRESH_TTL_DAYS: int = 30
     REDIS_URL: str
 
-settings = Settings() 
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
 
+    RAWG_API_KEY: str | None = None
+
+    @property
+    def refresh_ttl_seconds(self) -> int:
+        return self.REFRESH_TTL_DAYS * 24 * 60 * 60
+
+
+settings = Settings()
