@@ -11,8 +11,9 @@ from pymongo.errors import DuplicateKeyError
 
 from app.core.celery_config import celery_app
 from app.core.config import settings
-from app.core.mongo import get_activities_collection, get_game_covers_collection
+from app.core.mongo import get_activities_collection, get_game_covers_collection, init_mongo, close_mongo
 from app.core.storage import get_s3_client
+from pymongo.asynchronous.collection import AsyncCollection
 
 
 async def async_fetch_game_cover(activity_id: str, game_name: str):
@@ -103,7 +104,7 @@ async def async_fetch_game_cover(activity_id: str, game_name: str):
 
 
 async def update_activity_cover(
-    activity_id: str, cover_key: str, game_id: int, collection
+    activity_id: str, cover_key: str, game_id: int, collection: AsyncCollection
 ):
     await collection.update_one(
         {"_id": ObjectId(activity_id), "category": "games"},
@@ -117,7 +118,7 @@ async def update_activity_cover(
     )
 
 
-async def fail_activity_cover(activity_id: str, collection):
+async def fail_activity_cover(activity_id: str, collection: AsyncCollection):
     await collection.update_one(
         {"_id": ObjectId(activity_id), "category": "games"},
         {"$set": {"extra_data.cover_status": "failed"}},
@@ -127,8 +128,6 @@ async def fail_activity_cover(activity_id: str, collection):
 @celery_app.task(bind=True, max_retries=3)
 def fetch_game_cover(self: Task, activity_id: str, game_name: str):
     async def runner():
-        from app.core.mongo import close_mongo, init_mongo
-
         await init_mongo()
         try:
             return await async_fetch_game_cover(activity_id, game_name)

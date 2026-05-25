@@ -4,6 +4,7 @@ import httpx
 from redis.asyncio import Redis
 
 from app.core.config import settings
+from app.core.http_client import get_http_client
 from app.schemas.game import GameSearchResult
 
 
@@ -50,18 +51,18 @@ class GameSearchService:
             return [], False
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "https://api.rawg.io/api/games",
-                    params={
-                        "key": settings.RAWG_API_KEY,
-                        "search": query.strip(),
-                        "page_size": GameSearchService.RAWG_PAGE_SIZE,
-                        "search_precise": True,
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
+            client = get_http_client()
+            response = await client.get(
+                "https://api.rawg.io/api/games",
+                params={
+                    "key": settings.RAWG_API_KEY,
+                    "search": query.strip(),
+                    "page_size": GameSearchService.RAWG_PAGE_SIZE,
+                    "search_precise": True,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
 
         except (httpx.Timeout, httpx.HTTPError):
             return [], False
