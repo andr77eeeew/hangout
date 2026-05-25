@@ -9,7 +9,6 @@ venv/
 AGENTS.md
 run_test.py
 .pytest_cache/
-!/INSTALL.md
 /PLAN.md
 /CLAUDE.md
 /.mcp.json
@@ -19,3 +18,10 @@ run_test.py
 /backend/.claude/settings.local.json
 /backend/.claude/settings.json
 /backend/.claude/hooks/context-timeline.py
+/README.md
+/GEMINI.md
+/.agents/mcp_config.json
+/.agents/subagents.json
+/.agents/agents/core-reviewer/agent.json
+/.agents/
+/.antigravitycli/
