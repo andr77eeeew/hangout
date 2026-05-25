@@ -50,8 +50,8 @@ class ActivityService:
     @staticmethod
     async def _fetch_users_map(user_ids: set[int], db: AsyncSession) -> dict[int, User]:
         """
-        Загружает пользователей одним батч-запросом.
-        Всегда передавай все нужные IDs сразу, не вызывай в цикле!
+        Loads users in a single batch request.
+        Always pass all required IDs at once, do not call in a loop!
         """
         if not user_ids:
             return {}
