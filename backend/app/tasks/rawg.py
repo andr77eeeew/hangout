@@ -11,7 +11,12 @@ from pymongo.errors import DuplicateKeyError
 
 from app.core.celery_config import celery_app
 from app.core.config import settings
-from app.core.mongo import get_activities_collection, get_game_covers_collection, init_mongo, close_mongo
+from app.core.mongo import (
+    get_activities_collection,
+    get_game_covers_collection,
+    init_mongo,
+    close_mongo,
+)
 from app.core.storage import get_s3_client
 from pymongo.asynchronous.collection import AsyncCollection
 
