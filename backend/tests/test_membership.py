@@ -126,7 +126,7 @@ class TestJoinActivity:
 
         assert response.status_code == 201
         assert response.json()["status"] == "pending"
-        # current_members НЕ должен инкрементироваться для pending
+        # current_members should not increment for pending
         mock_mongo.find_one_and_update.assert_not_called()
 
     async def test_join_own_activity_fails(
@@ -253,7 +253,7 @@ class TestApproveMember:
     ):
         membership = _make_membership(membership_status="pending", user_id=2)
         mock_membership_col.find_one = AsyncMock(return_value=membership)
-        # creator_id != current_user.id (1), и user не модератор
+        # creator_id != current_user.id (1), and user is not a moderator
         mock_mongo.find_one = AsyncMock(return_value=_make_activity(creator_id=99))
 
         response = await async_client.post(
@@ -265,7 +265,7 @@ class TestApproveMember:
     async def test_approve_non_pending_fails(
         self, async_client, mock_mongo, mock_membership_col
     ):
-        # Membership уже approved — нельзя повторно одобрить
+        # Membership already approved - cannot approve again
         membership = _make_membership(membership_status="approved", user_id=2)
         mock_membership_col.find_one = AsyncMock(return_value=membership)
         mock_mongo.find_one = AsyncMock(return_value=_make_activity(creator_id=1))
@@ -300,13 +300,13 @@ class TestApproveMember:
     async def test_approve_as_moderator_success(
         self, async_client, mock_mongo, mock_membership_col
     ):
-        """Модератор может одобрить участника чужой активности."""
+        """Moderator can approve a member of someone else's activity."""
         mod_user = _make_user(user_id=1, role=UserRole.moderator)
         app.dependency_overrides[get_current_user] = lambda: mod_user
 
         membership = _make_membership(membership_status="pending", user_id=2)
         mock_membership_col.find_one = AsyncMock(return_value=membership)
-        # creator_id != moderator.id, но модератор имеет право
+        # creator_id != moderator.id, but moderator has permission
         mock_mongo.find_one = AsyncMock(return_value=_make_activity(creator_id=99))
         mock_mongo.find_one_and_update = AsyncMock(
             return_value=_make_activity(current_members=2)
@@ -390,7 +390,7 @@ class TestKickMember:
 
         assert response.status_code == 200
         assert response.json()["status"] == "kicked"
-        # current_members должен быть декрементирован
+        # current_members should be decremented
         mock_mongo.find_one_and_update.assert_called_once()
 
     async def test_kick_non_approved_fails(
@@ -408,7 +408,7 @@ class TestKickMember:
         assert "approved" in response.json()["detail"].lower()
 
     async def test_kick_self_fails(self, async_client, mock_mongo, mock_membership_col):
-        """Создатель не может кикнуть себя."""
+        """Creator cannot kick themselves."""
         # membership.user_id == current_user.id (1)
         membership = _make_membership(membership_status="approved", user_id=1)
         mock_membership_col.find_one = AsyncMock(return_value=membership)
@@ -495,7 +495,7 @@ class TestListMembers:
     async def test_list_members_as_regular_user(
         self, async_client, mock_mongo, mock_membership_col, mock_db
     ):
-        """Обычный пользователь видит только approved участников."""
+        """Regular user only sees approved members."""
         mock_mongo.find_one = AsyncMock(return_value=_make_activity(creator_id=99))
 
         approved_member = _make_membership(user_id=2, membership_status="approved")
@@ -503,7 +503,7 @@ class TestListMembers:
         mock_cursor.to_list = AsyncMock(return_value=[approved_member])
         mock_membership_col.find = MagicMock(return_value=mock_cursor)
 
-        # Мок для SQL-запроса пользователей
+        # Mock for SQL user query
         mock_user_obj = MagicMock()
         mock_user_obj.id = 2
         mock_user_obj.username = "member2"
@@ -521,7 +521,7 @@ class TestListMembers:
         assert data["items"][0]["user_id"] == 2
         assert data["items"][0]["user_preview"]["username"] == "member2"
 
-        # Проверяем что фильтр содержит ТОЛЬКО approved
+        # Verify that filter contains ONLY approved
         call_args = mock_membership_col.find.call_args
         status_filter = call_args[0][0]["status"]["$in"]
         assert "approved" in status_filter
@@ -530,8 +530,8 @@ class TestListMembers:
     async def test_list_members_as_creator(
         self, async_client, mock_mongo, mock_membership_col, mock_db
     ):
-        """Создатель видит approved + pending участников."""
-        # creator_id == current_user.id (1) → видит pending тоже
+        """Creator sees approved + pending members."""
+        # creator_id == current_user.id (1) -> sees pending too
         mock_mongo.find_one = AsyncMock(return_value=_make_activity(creator_id=1))
 
         members = [
@@ -558,7 +558,7 @@ class TestListMembers:
         data = response.json()
         assert data["total"] == 2
 
-        # Проверяем что фильтр содержит approved + pending
+        # Verify that filter contains approved + pending
         call_args = mock_membership_col.find.call_args
         status_filter = call_args[0][0]["status"]["$in"]
         assert "approved" in status_filter
@@ -567,7 +567,7 @@ class TestListMembers:
     async def test_list_members_as_moderator(
         self, async_client, mock_mongo, mock_membership_col, mock_db
     ):
-        """Модератор видит approved + pending даже для чужих активностей."""
+        """Moderator sees approved + pending even for other activities."""
         mod_user = _make_user(user_id=1, role=UserRole.moderator)
         app.dependency_overrides[get_current_user] = lambda: mod_user
 
@@ -584,7 +584,7 @@ class TestListMembers:
 
         assert response.status_code == 200
 
-        # Модератор видит approved + pending
+        # Moderator sees approved + pending
         call_args = mock_membership_col.find.call_args
         status_filter = call_args[0][0]["status"]["$in"]
         assert "approved" in status_filter

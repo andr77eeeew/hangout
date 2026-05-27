@@ -326,7 +326,6 @@ class MembershipService:
                 detail="Invalid activity id",
             )
 
-        # 1. Проверяем существование активности
         activity = await activities_col.find_one({"_id": ObjectId(activity_id)})
         if activity is None:
             raise HTTPException(
@@ -334,20 +333,16 @@ class MembershipService:
                 detail="Activity not found",
             )
 
-        # 2. Определяем доступные статусы в зависимости от роли запрашивающего
         is_creator_or_mod = (activity["creator_id"] == current_user_id) or is_moderator
 
         if is_creator_or_mod:
-            # Создатель и модераторы видят утверждённых участников + кандидатов (pending)
             allowed_statuses = [
                 MembershipStatus.approved.value,
                 MembershipStatus.pending.value,
             ]
         else:
-            # Обычные пользователи видят только утверждённых участников
             allowed_statuses = [MembershipStatus.approved.value]
 
-        # 3. Выбираем участников из коллекции membership
         cursor = membership_col.find(
             {
                 "activity_id": ObjectId(activity_id),
@@ -356,7 +351,6 @@ class MembershipService:
         )
         memberships = await cursor.to_list(length=None)
 
-        # 4. Пакетно загружаем информацию о пользователях в один запрос
         user_ids = {m["user_id"] for m in memberships}
         users_map = {}
         if user_ids:
@@ -369,7 +363,6 @@ class MembershipService:
             users = result.scalars().all()
             users_map = {user.id: user for user in users}
 
-        # 5. Формируем список участников с превью
         items = []
         for m in memberships:
             user = users_map.get(m["user_id"])
