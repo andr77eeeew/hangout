@@ -12,7 +12,7 @@ def override_auth(mock_user):
 
 
 async def test_get_feed_success(async_client, mock_mongo):
-    # Мокаем красивый ответ от MongoDB
+    # Mock response from MongoDB
     mock_cursor = MagicMock()
     mock_cursor.sort.return_value.limit.return_value.to_list = AsyncMock(
         return_value=[
@@ -23,6 +23,11 @@ async def test_get_feed_success(async_client, mock_mongo):
                 "type": "open",
                 "format": "online",
                 "category": "games",
+                "extra_data": {
+                    "category": "games",
+                    "game_name": "Test Game",
+                    "platform": "pc",
+                },
                 "date": "2026-10-10T12:00:00Z",
                 "max_members": 10,
                 "creator_id": 1,
@@ -37,7 +42,7 @@ async def test_get_feed_success(async_client, mock_mongo):
     )
     mock_mongo.find = MagicMock(return_value=mock_cursor)
 
-    # Патчим _fetch_users_map чтобы не делать лишний мок PostgreSQL внутри
+    # Patch _fetch_users_map to avoid mocking PostgreSQL internally
     with patch(
         "app.services.activity.ActivityService._fetch_users_map",
         return_value={
@@ -55,7 +60,7 @@ async def test_get_feed_success(async_client, mock_mongo):
 
 
 async def test_get_activity_not_found(async_client, mock_mongo):
-    # Имитируем что база ничего не нашла
+    # Simulate database returning None
     mock_mongo.find_one.return_value = None
 
     response = await async_client.get("/activities/60d5ec49c4f1c9a6f81a1b3a")
@@ -64,14 +69,19 @@ async def test_get_activity_not_found(async_client, mock_mongo):
 
 
 async def test_create_activity_invalid_date(async_client):
-    # Умышленно передаем дату в прошлом
+    # Deliberately pass a date in the past
     payload = {
         "title": "Valid Title Here",
         "description": "Valid description length over here",
         "type": "open",
         "format": "online",
         "category": "games",
-        "date": "2020-01-01T12:00:00Z",  # <-- Ошибка (в прошлом)
+        "extra_data": {
+            "category": "games",
+            "game_name": "Test Game",
+            "platform": "pc",
+        },
+        "date": "2020-01-01T12:00:00Z",  # <-- Error (in the past)
         "max_members": 5,
         "tags": ["cool"],
     }
@@ -89,6 +99,11 @@ async def test_create_activity_success(async_client, mock_db, mock_mongo):
         "type": "open",
         "format": "online",
         "category": "games",
+        "extra_data": {
+            "category": "games",
+            "game_name": "Test Game",
+            "platform": "pc",
+        },
         "date": "2026-10-10T12:00:00Z",
         "max_members": 5,
         "tags": ["cool"],
@@ -119,6 +134,11 @@ async def test_get_activity_success(async_client, mock_mongo):
             "type": "open",
             "format": "online",
             "category": "games",
+            "extra_data": {
+                "category": "games",
+                "game_name": "Test Game",
+                "platform": "pc",
+            },
             "date": "2026-10-10T12:00:00Z",
             "max_members": 5,
             "tags": ["cool"],
@@ -145,6 +165,11 @@ async def test_update_activity_success(async_client, mock_mongo, mock_db):
             "type": "open",
             "format": "online",
             "category": "games",
+            "extra_data": {
+                "category": "games",
+                "game_name": "Test Game",
+                "platform": "pc",
+            },
             "date": "2026-10-10T12:00:00Z",
             "max_members": 5,
             "tags": ["cool"],
