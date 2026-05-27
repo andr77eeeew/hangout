@@ -55,7 +55,15 @@ async def get_activities_collection() -> AsyncCollection:
 
 async def get_membership_collection() -> AsyncCollection:
     db = await get_mongo_db()
-    return db["membership"]
+    collection = db["membership"]
+    await collection.create_index(
+        [("activity_id", ASCENDING), ("user_id", ASCENDING)],
+        unique=True,
+        partialFilterExpression={"status": {"$in": ["pending", "approved"]}},
+    )
+    await collection.create_index([("activity_id", ASCENDING), ("status", ASCENDING)])
+    await collection.create_index([("user_id", ASCENDING), ("status", ASCENDING)])
+    return collection
 
 
 async def get_game_covers_collection() -> AsyncCollection:
