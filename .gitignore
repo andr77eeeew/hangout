@@ -13,15 +13,9 @@ run_test.py
 /CLAUDE.md
 /.mcp.json
 /.claude/
-/.claude/skills/business-context/user-flows.md
 /INSTALL.md
-/backend/.claude/settings.local.json
-/backend/.claude/settings.json
-/backend/.claude/hooks/context-timeline.py
 /README.md
 /GEMINI.md
-/.agents/mcp_config.json
-/.agents/subagents.json
-/.agents/agents/core-reviewer/agent.json
 /.agents/
 /.antigravitycli/
+/docs

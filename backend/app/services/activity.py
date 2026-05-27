@@ -11,6 +11,7 @@ from app.models.user import User, UserRole
 from app.schemas.activity import (
     ActivityCategory,
     ActivityCreate,
+    ActivityFormat,
     ActivityResponse,
     ActivityResponseFeed,
     ActivityStatus,
@@ -102,6 +103,7 @@ class ActivityService:
         activity_data: ActivityCreate,
         creator_id: int,
         collection: AsyncCollection,
+        membership_col: AsyncCollection,
         db: AsyncSession,
         s3_public_sign,
     ) -> ActivityResponse:
@@ -121,6 +123,16 @@ class ActivityService:
                 activity_dict["extra_data"]["cover_status"] = CoverStatus.pending.value
 
         result = await collection.insert_one(activity_dict)
+
+        # Auto-join: creator becomes the first member
+        await membership_col.insert_one(
+            {
+                "activity_id": result.inserted_id,
+                "user_id": creator_id,
+                "status": "approved",
+                "joined_at": now,
+            }
+        )
 
         await db.execute(
             update(User)
@@ -150,6 +162,11 @@ class ActivityService:
         s3_public_sign,
         limit: int = 10,
         cursor: str | None = None,
+        category: ActivityCategory | None = None,
+        format: ActivityFormat | None = None,
+        tags: list[str] | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> ActivityResponseFeed:
         query: dict = {"status": ActivityStatus.active.value}
 
@@ -158,6 +175,22 @@ class ActivityService:
                 raise HTTPException(status_code=400, detail="Invalid cursor")
             query["_id"] = {"$lt": ObjectId(cursor)}
 
+        if category:
+            query["category"] = category.value
+
+        if format:
+            query["format"] = format.value
+
+        if tags:
+            query["tags"] = {"$all": tags}
+
+        if date_from or date_to:
+            date_filter: dict = {}
+            if date_from:
+                date_filter["$gte"] = date_from
+            if date_to:
+                date_filter["$lte"] = date_to
+            query["date"] = date_filter
         limit = max(1, min(limit, 50))
 
         docs = await (

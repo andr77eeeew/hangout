@@ -132,7 +132,9 @@ class ProfileService:
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        old_key = normalize_image_key(user.avatar if field_name == "avatar" else user.banner)
+        old_key = normalize_image_key(
+            user.avatar if field_name == "avatar" else user.banner
+        )
 
         await db.execute(
             update(User).where(User.id == user_id).values(**{field_name: object_key})
@@ -180,7 +182,9 @@ class ProfileService:
         return result.scalar_one()
 
     @staticmethod
-    async def upload_avatar(file: UploadFile, user_id: int, db: AsyncSession, s3: object):
+    async def upload_avatar(
+        file: UploadFile, user_id: int, db: AsyncSession, s3: object
+    ):
         return await ProfileService._upload_user_image(
             file=file,
             user_id=user_id,
@@ -192,7 +196,9 @@ class ProfileService:
         )
 
     @staticmethod
-    async def upload_banner(file: UploadFile, user_id: int, db: AsyncSession, s3: object):
+    async def upload_banner(
+        file: UploadFile, user_id: int, db: AsyncSession, s3: object
+    ):
         return await ProfileService._upload_user_image(
             file=file,
             user_id=user_id,

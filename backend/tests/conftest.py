@@ -11,11 +11,13 @@ os.environ["BUCKET_PASSWORD"] = "testpassword"
 os.environ["BUCKET_NAME"] = "testbucket"
 os.environ["BUCKET_ENDPOINT_URL"] = "http://localhost:9000"
 os.environ["BUCKET_PUBLIC_URL"] = "http://localhost:9000"
+os.environ["CELERY_BROKER_URL"] = "amqp://guest:guest@localhost:5672//"
+os.environ["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/0"
 
 from unittest.mock import AsyncMock, MagicMock
 
 from app.core.database import get_db
-from app.core.mongo import get_activities_collection
+from app.core.mongo import get_activities_collection, get_membership_collection
 from app.core.redis_client import get_redis
 from app.core.storage import get_s3_client, get_s3_public_sign_client
 from app.main import app
@@ -48,6 +50,11 @@ def mock_mongo():
 
 
 @pytest.fixture
+def mock_membership_col():
+    return AsyncMock()
+
+
+@pytest.fixture
 def mock_s3():
     return MagicMock()
 
@@ -76,10 +83,13 @@ def mock_user():
 
 
 @pytest.fixture
-async def async_client(mock_db, mock_redis, mock_mongo, mock_s3, mock_s3_sign):
+async def async_client(
+    mock_db, mock_redis, mock_mongo, mock_membership_col, mock_s3, mock_s3_sign
+):
     app.dependency_overrides[get_db] = lambda: mock_db
     app.dependency_overrides[get_redis] = lambda: mock_redis
     app.dependency_overrides[get_activities_collection] = lambda: mock_mongo
+    app.dependency_overrides[get_membership_collection] = lambda: mock_membership_col
     app.dependency_overrides[get_s3_client] = lambda: mock_s3
     app.dependency_overrides[get_s3_public_sign_client] = lambda: mock_s3_sign
 
