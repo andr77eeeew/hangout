@@ -1,14 +1,17 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, status
 from pymongo.asynchronous.collection import AsyncCollection
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.core.mongo import get_activities_collection
+from app.core.mongo import get_activities_collection, get_membership_collection
 from app.core.storage import get_s3_public_sign_client
 from app.models.user import User
 from app.schemas.activity import (
+    ActivityCategory,
     ActivityCreate,
+    ActivityFormat,
     ActivityResponse,
     ActivityResponseFeed,
     ActivityUpdate,
@@ -48,6 +51,7 @@ async def create_activity(
     activity_data: ActivityCreate,
     current_user: User = Depends(get_current_user),
     collection: AsyncCollection = Depends(get_activities_collection),
+    membership_col: AsyncCollection = Depends(get_membership_collection),
     db: AsyncSession = Depends(get_db),
     s3_public_sign=Depends(get_s3_public_sign_client),
 ):
@@ -55,6 +59,7 @@ async def create_activity(
         activity_data=activity_data,
         creator_id=current_user.id,
         collection=collection,
+        membership_col=membership_col,
         db=db,
         s3_public_sign=s3_public_sign,
     )
@@ -83,13 +88,29 @@ async def get_activities(
     s3_public_sign=Depends(get_s3_public_sign_client),
     limit: int = (Query(10, ge=1, le=50)),
     cursor: str | None = None,
+    category: ActivityCategory | None = None,
+    format: ActivityFormat | None = None,
+    tags: str | None = Query(
+        None, description="Comma-separated tag slugs, e.g. 'minecraft,survival'"
+    ),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ):
+    tag_list: list[str] | None = None
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+
     return await activity_service.list_feed(
         collection=collection,
         db=db,
         s3_public_sign=s3_public_sign,
         limit=limit,
         cursor=cursor,
+        category=category,
+        format=format,
+        tags=tag_list,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
