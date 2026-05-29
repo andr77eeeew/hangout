@@ -628,7 +628,7 @@ async def test_connection_manager_broadcast_success() -> None:
     await manager.connect(ws2, activity_id, 2)
 
     envelope = WebSocketEnvelope(
-        event="system", data=WebSocketSystemData(content="Hello", type="info")
+        event="system", data=WebSocketSystemData(content="Hello", type="join")
     )
 
     await manager.broadcast_to_room(activity_id, envelope)
@@ -654,7 +654,7 @@ async def test_connection_manager_broadcast_failure_cleanup() -> None:
     await manager.connect(ws2, activity_id, 2)
 
     envelope = WebSocketEnvelope(
-        event="system", data=WebSocketSystemData(content="Hello", type="info")
+        event="system", data=WebSocketSystemData(content="Hello", type="join")
     )
 
     await manager.broadcast_to_room(activity_id, envelope)
@@ -692,7 +692,8 @@ async def test_connection_manager_disconnect_user() -> None:
     assert await manager.get_room_user_count(activity_id) == 1
 
 
-def test_rate_limiter_messages_within_limit() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_messages_within_limit() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter
 
     limiter = ChatRateLimiter()
@@ -700,12 +701,13 @@ def test_rate_limiter_messages_within_limit() -> None:
     user_id = 1
 
     for _ in range(5):
-        assert limiter.check_rate_limit(activity_id, user_id) is True
+        assert await limiter.check_rate_limit(activity_id, user_id) is True
 
-    assert limiter.get_violation_count(activity_id, user_id) == 0
+    assert await limiter.get_violation_count(activity_id, user_id) == 0
 
 
-def test_rate_limiter_rejects_sixth_message() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_rejects_sixth_message() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter
 
     limiter = ChatRateLimiter()
@@ -713,13 +715,14 @@ def test_rate_limiter_rejects_sixth_message() -> None:
     user_id = 1
 
     for _ in range(5):
-        assert limiter.check_rate_limit(activity_id, user_id) is True
+        assert await limiter.check_rate_limit(activity_id, user_id) is True
 
-    assert limiter.check_rate_limit(activity_id, user_id) is False
-    assert limiter.get_violation_count(activity_id, user_id) == 1
+    assert await limiter.check_rate_limit(activity_id, user_id) is False
+    assert await limiter.get_violation_count(activity_id, user_id) == 1
 
 
-def test_rate_limiter_violation_count_increments_and_resets() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_violation_count_increments_and_resets() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter
 
     limiter = ChatRateLimiter()
@@ -727,24 +730,25 @@ def test_rate_limiter_violation_count_increments_and_resets() -> None:
     user_id = 1
 
     for _ in range(5):
-        limiter.check_rate_limit(activity_id, user_id)
+        await limiter.check_rate_limit(activity_id, user_id)
 
-    limiter.check_rate_limit(activity_id, user_id)
-    assert limiter.get_violation_count(activity_id, user_id) == 1
+    await limiter.check_rate_limit(activity_id, user_id)
+    assert await limiter.get_violation_count(activity_id, user_id) == 1
 
-    limiter.check_rate_limit(activity_id, user_id)
-    assert limiter.get_violation_count(activity_id, user_id) == 2
+    await limiter.check_rate_limit(activity_id, user_id)
+    assert await limiter.get_violation_count(activity_id, user_id) == 2
 
-    limiter.check_rate_limit(activity_id, user_id)
-    assert limiter.get_violation_count(activity_id, user_id) == 3
+    await limiter.check_rate_limit(activity_id, user_id)
+    assert await limiter.get_violation_count(activity_id, user_id) == 3
 
     with patch("app.core.ws_rate_limit.time") as mock_time:
         mock_time.monotonic.return_value = 1_000_000.0
-        assert limiter.check_rate_limit(activity_id, user_id) is True
-        assert limiter.get_violation_count(activity_id, user_id) == 0
+        assert await limiter.check_rate_limit(activity_id, user_id) is True
+        assert await limiter.get_violation_count(activity_id, user_id) == 0
 
 
-def test_rate_limiter_allows_after_window_expires() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_allows_after_window_expires() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter
 
     limiter = ChatRateLimiter()
@@ -756,16 +760,17 @@ def test_rate_limiter_allows_after_window_expires() -> None:
     with patch("app.core.ws_rate_limit.time") as mock_time:
         mock_time.monotonic.return_value = base_time
         for _ in range(5):
-            limiter.check_rate_limit(activity_id, user_id)
+            await limiter.check_rate_limit(activity_id, user_id)
 
-        assert limiter.check_rate_limit(activity_id, user_id) is False
+        assert await limiter.check_rate_limit(activity_id, user_id) is False
 
         mock_time.monotonic.return_value = base_time + 11.0
-        assert limiter.check_rate_limit(activity_id, user_id) is True
-        assert limiter.get_violation_count(activity_id, user_id) == 0
+        assert await limiter.check_rate_limit(activity_id, user_id) is True
+        assert await limiter.get_violation_count(activity_id, user_id) == 0
 
 
-def test_rate_limiter_cleanup_user() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_cleanup_user() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter
 
     limiter = ChatRateLimiter()
@@ -773,18 +778,19 @@ def test_rate_limiter_cleanup_user() -> None:
     user_id = 1
 
     for _ in range(5):
-        limiter.check_rate_limit(activity_id, user_id)
+        await limiter.check_rate_limit(activity_id, user_id)
 
-    limiter.check_rate_limit(activity_id, user_id)
-    assert limiter.get_violation_count(activity_id, user_id) == 1
+    await limiter.check_rate_limit(activity_id, user_id)
+    assert await limiter.get_violation_count(activity_id, user_id) == 1
 
-    limiter.cleanup_user(activity_id, user_id)
+    await limiter.cleanup_user(activity_id, user_id)
 
-    assert limiter.get_violation_count(activity_id, user_id) == 0
-    assert limiter.check_rate_limit(activity_id, user_id) is True
+    assert await limiter.get_violation_count(activity_id, user_id) == 0
+    assert await limiter.check_rate_limit(activity_id, user_id) is True
 
 
-def test_rate_limiter_max_violations_threshold() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_max_violations_threshold() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter, MAX_VIOLATIONS_BEFORE_DISCONNECT
 
     limiter = ChatRateLimiter()
@@ -792,29 +798,48 @@ def test_rate_limiter_max_violations_threshold() -> None:
     user_id = 1
 
     for _ in range(5):
-        limiter.check_rate_limit(activity_id, user_id)
+        await limiter.check_rate_limit(activity_id, user_id)
 
     for violation_number in range(1, MAX_VIOLATIONS_BEFORE_DISCONNECT + 1):
-        limiter.check_rate_limit(activity_id, user_id)
-        assert limiter.get_violation_count(activity_id, user_id) == violation_number
+        await limiter.check_rate_limit(activity_id, user_id)
+        assert (
+            await limiter.get_violation_count(activity_id, user_id) == violation_number
+        )
 
     assert (
-        limiter.get_violation_count(activity_id, user_id)
+        await limiter.get_violation_count(activity_id, user_id)
         >= MAX_VIOLATIONS_BEFORE_DISCONNECT
     )
 
 
-def test_rate_limiter_independent_per_user_and_activity() -> None:
+@pytest.mark.asyncio
+async def test_rate_limiter_independent_per_user_and_activity() -> None:
     from app.core.ws_rate_limit import ChatRateLimiter
 
     limiter = ChatRateLimiter()
 
     for _ in range(5):
-        limiter.check_rate_limit("activity_1", 1)
+        await limiter.check_rate_limit("activity_1", 1)
 
-    assert limiter.check_rate_limit("activity_1", 1) is False
-    assert limiter.check_rate_limit("activity_1", 2) is True
-    assert limiter.check_rate_limit("activity_2", 1) is True
+    assert await limiter.check_rate_limit("activity_1", 1) is False
+    assert await limiter.check_rate_limit("activity_1", 2) is True
+    assert await limiter.check_rate_limit("activity_2", 1) is True
+
+
+@pytest.mark.asyncio
+async def test_websocket_rate_limiter_concurrency() -> None:
+    import asyncio
+    from app.core.ws_rate_limit import ChatRateLimiter
+
+    limiter = ChatRateLimiter()
+    tasks = [limiter.check_rate_limit("activity_1", 1) for _ in range(10)]
+    results = await asyncio.gather(*tasks)
+
+    successes = results.count(True)
+    failures = results.count(False)
+
+    assert successes == 5
+    assert failures == 5
 
 
 def test_websocket_auth_failure() -> None:
@@ -962,7 +987,7 @@ def test_websocket_connection_success(mock_user: User) -> None:
         "/activities/507f1f77bcf86cd799439011/chat?token=valid"
     ) as websocket:
         data = websocket.receive_json()
-        assert data["event"] == "join"
+        assert data["event"] == "system"
         assert data["data"]["content"] == f"{mock_user.username} joined the chat"
         assert data["data"]["type"] == "join"
 
@@ -1018,7 +1043,8 @@ def test_websocket_send_valid_message(mock_user: User) -> None:
         "/activities/507f1f77bcf86cd799439011/chat?token=valid"
     ) as websocket:
         join_msg = websocket.receive_json()
-        assert join_msg["event"] == "join"
+        assert join_msg["event"] == "system"
+        assert join_msg["data"]["type"] == "join"
 
         count_msg = websocket.receive_json()
         assert count_msg["event"] == "member_count"
@@ -1127,22 +1153,84 @@ def test_websocket_send_empty_or_oversized_message(mock_user: User) -> None:
         websocket.send_json({"event": "message", "data": {"content": "   "}})
         err1 = websocket.receive_json()
         assert err1["event"] == "error"
-        assert err1["data"]["detail"] == "Message content cannot be empty"
+        assert err1["data"]["detail"] == "String should have at least 1 character"
 
         websocket.send_json({"event": "message", "data": {"content": "a" * 2001}})
         err2 = websocket.receive_json()
         assert err2["event"] == "error"
-        assert err2["data"]["detail"] == "Message content is too long"
+        assert err2["data"]["detail"] == "String should have at most 2000 characters"
 
         websocket.send_json({"event": "message", "data": {}})
         err3 = websocket.receive_json()
         assert err3["event"] == "error"
-        assert err3["data"]["detail"] == "Invalid message format"
+        assert err3["data"]["detail"] == "Field required"
 
     app.dependency_overrides.clear()
 
 
-def test_websocket_rate_limiting_disconnect(mock_user: User) -> None:
+def test_websocket_client_cannot_create_system_messages(mock_user: User) -> None:
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.core.mongo import get_activities_collection, get_membership_collection
+
+    mock_activities_col = AsyncMock()
+    mock_activities_col.find_one.return_value = {
+        "_id": ObjectId("507f1f77bcf86cd799439011"),
+        "status": "active",
+    }
+
+    mock_membership_col = AsyncMock()
+    mock_membership_col.find_one.return_value = {
+        "activity_id": ObjectId("507f1f77bcf86cd799439011"),
+        "user_id": mock_user.id,
+        "status": "approved",
+    }
+
+    mock_chat_col = AsyncMock()
+
+    app.dependency_overrides.clear()
+    from app.core.dependencies import get_current_user_ws
+    from app.core.mongo import get_chat_messages_collection
+    from app.core.database import get_db
+    from app.core.storage import get_s3_public_sign_client
+
+    app.dependency_overrides[get_current_user_ws] = lambda: mock_user
+    app.dependency_overrides[get_activities_collection] = lambda: mock_activities_col
+    app.dependency_overrides[get_membership_collection] = lambda: mock_membership_col
+    app.dependency_overrides[get_chat_messages_collection] = lambda: mock_chat_col
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    app.dependency_overrides[get_s3_public_sign_client] = lambda: MagicMock()
+
+    client = TestClient(app)
+    with client.websocket_connect(
+        "/activities/507f1f77bcf86cd799439011/chat?token=valid"
+    ) as websocket:
+        # Drain initial join and member count broadcast envelopes
+        websocket.receive_json()
+        websocket.receive_json()
+
+        # Send a message with the extra field "message_type": "system"
+        websocket.send_json(
+            {
+                "event": "message",
+                "data": {
+                    "content": "I am system",
+                    "message_type": "system",
+                },
+            }
+        )
+        err = websocket.receive_json()
+        assert err["event"] == "error"
+        assert err["data"]["detail"] == "Extra inputs are not permitted"
+
+        # Verify that no insert/save was performed to MongoDB
+        mock_chat_col.insert_one.assert_not_called()
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_websocket_rate_limiting_disconnect(mock_user: User) -> None:
     from fastapi.testclient import TestClient
     from starlette.websockets import WebSocketDisconnect
     from app.main import app
@@ -1169,7 +1257,7 @@ def test_websocket_rate_limiting_disconnect(mock_user: User) -> None:
     }
 
     activity_id = "507f1f77bcf86cd799439011"
-    chat_rate_limiter.cleanup_user(activity_id, mock_user.id)
+    await chat_rate_limiter.cleanup_user(activity_id, mock_user.id)
 
     mock_chat_col = AsyncMock()
     mock_db = AsyncMock()
@@ -1273,7 +1361,8 @@ def test_websocket_disconnect_leave_broadcast(mock_user: User) -> None:
         "/activities/507f1f77bcf86cd799439011/chat?token=token_b"
     ) as ws_b:
         join_b = ws_b.receive_json()
-        assert join_b["event"] == "join"
+        assert join_b["event"] == "system"
+        assert join_b["data"]["type"] == "join"
         count_b = ws_b.receive_json()
         assert count_b["event"] == "member_count"
         assert count_b["data"]["online_count"] == 1
@@ -1282,26 +1371,29 @@ def test_websocket_disconnect_leave_broadcast(mock_user: User) -> None:
             "/activities/507f1f77bcf86cd799439011/chat?token=token_a"
         ) as ws_a:
             join_a_own = ws_a.receive_json()
-            assert join_a_own["event"] == "join"
+            assert join_a_own["event"] == "system"
+            assert join_a_own["data"]["type"] == "join"
             count_a_own = ws_a.receive_json()
             assert count_a_own["event"] == "member_count"
             assert count_a_own["data"]["online_count"] == 2
 
             join_a = ws_b.receive_json()
-            assert join_a["event"] == "join"
+            assert join_a["event"] == "system"
+            assert join_a["data"]["type"] == "join"
             assert join_a["data"]["content"] == "testuser joined the chat"
 
             count_b_2 = ws_b.receive_json()
             assert count_b_2["event"] == "member_count"
             assert count_b_2["data"]["online_count"] == 2
 
+        leave_a = ws_b.receive_json()
+        assert leave_a["event"] == "system"
+        assert leave_a["data"]["type"] == "leave"
+        assert leave_a["data"]["content"] == "testuser left the chat"
+
         count_b_after = ws_b.receive_json()
         assert count_b_after["event"] == "member_count"
         assert count_b_after["data"]["online_count"] == 1
-
-        leave_a = ws_b.receive_json()
-        assert leave_a["event"] == "leave"
-        assert leave_a["data"]["content"] == "testuser left the chat"
 
     app.dependency_overrides.clear()
 
@@ -1364,7 +1456,8 @@ def test_websocket_member_count_scenarios(mock_user: User) -> None:
         "/activities/507f1f77bcf86cd799439011/chat?token=token_a"
     ) as ws_a1:
         join_a1 = ws_a1.receive_json()
-        assert join_a1["event"] == "join"
+        assert join_a1["event"] == "system"
+        assert join_a1["data"]["type"] == "join"
 
         count_a1 = ws_a1.receive_json()
         assert count_a1["event"] == "member_count"
@@ -1376,14 +1469,16 @@ def test_websocket_member_count_scenarios(mock_user: User) -> None:
         ) as ws_a2:
             # ws_a2 (Tab 2) gets join and member_count = 1
             join_a2 = ws_a2.receive_json()
-            assert join_a2["event"] == "join"
+            assert join_a2["event"] == "system"
+            assert join_a2["data"]["type"] == "join"
             count_a2 = ws_a2.receive_json()
             assert count_a2["event"] == "member_count"
             assert count_a2["data"]["online_count"] == 1
 
             # ws_a1 (Tab 1) gets the join and member_count = 1 from Tab 2
             join_a1_dup = ws_a1.receive_json()
-            assert join_a1_dup["event"] == "join"
+            assert join_a1_dup["event"] == "system"
+            assert join_a1_dup["data"]["type"] == "join"
             count_a1_dup = ws_a1.receive_json()
             assert count_a1_dup["event"] == "member_count"
             assert count_a1_dup["data"]["online_count"] == 1
@@ -1394,29 +1489,149 @@ def test_websocket_member_count_scenarios(mock_user: User) -> None:
             ) as ws_b:
                 # ws_b gets join and member_count = 2
                 join_b = ws_b.receive_json()
-                assert join_b["event"] == "join"
+                assert join_b["event"] == "system"
+                assert join_b["data"]["type"] == "join"
                 count_b = ws_b.receive_json()
                 assert count_b["event"] == "member_count"
                 assert count_b["data"]["online_count"] == 2
 
                 # ws_a1 (Tab 1) and ws_a2 (Tab 2) both receive B's join and member_count = 2
-                assert ws_a1.receive_json()["event"] == "join"
+                join_a1_recv = ws_a1.receive_json()
+                assert join_a1_recv["event"] == "system"
+                assert join_a1_recv["data"]["type"] == "join"
                 count_a1_b = ws_a1.receive_json()
                 assert count_a1_b["event"] == "member_count"
                 assert count_a1_b["data"]["online_count"] == 2
 
-                assert ws_a2.receive_json()["event"] == "join"
+                join_a2_recv = ws_a2.receive_json()
+                assert join_a2_recv["event"] == "system"
+                assert join_a2_recv["data"]["type"] == "join"
                 count_a2_b = ws_a2.receive_json()
                 assert count_a2_b["event"] == "member_count"
                 assert count_a2_b["data"]["online_count"] == 2
 
             # User B disconnects -> online_count back to 1
-            # ws_a1 and ws_a2 receive member_count = 1 and then leave
-            assert ws_a1.receive_json()["event"] == "member_count"
-            assert ws_a1.receive_json()["event"] == "leave"
+            # ws_a1 and ws_a2 receive leave and then member_count = 1
+            leave_a1 = ws_a1.receive_json()
+            assert leave_a1["event"] == "system"
+            assert leave_a1["data"]["type"] == "leave"
+            c_a1 = ws_a1.receive_json()
+            assert c_a1["event"] == "member_count"
 
-            assert ws_a2.receive_json()["event"] == "member_count"
-            assert ws_a2.receive_json()["event"] == "leave"
+            leave_a2 = ws_a2.receive_json()
+            assert leave_a2["event"] == "system"
+            assert leave_a2["data"]["type"] == "leave"
+            c_a2 = ws_a2.receive_json()
+            assert c_a2["event"] == "member_count"
+
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_websocket_multi_tab_rate_limiter_cleanup(mock_user: User) -> None:
+    from fastapi.testclient import TestClient
+    from fastapi import WebSocket
+    from app.main import app
+    from app.core.dependencies import get_current_user_ws
+    from app.core.mongo import get_activities_collection, get_membership_collection
+    from app.core.ws_rate_limit import chat_rate_limiter
+    from bson import ObjectId
+    from unittest.mock import AsyncMock, MagicMock
+
+    user_a = mock_user
+
+    mock_activities_col = AsyncMock()
+    mock_activities_col.find_one.return_value = {
+        "_id": ObjectId("507f1f77bcf86cd799439011"),
+        "status": "active",
+    }
+
+    async def mock_get_current_user_ws(websocket: WebSocket, db=None) -> User:
+        return user_a
+
+    mock_membership_col = AsyncMock()
+    mock_membership_col.find_one.return_value = {
+        "activity_id": ObjectId("507f1f77bcf86cd799439011"),
+        "user_id": user_a.id,
+        "status": "approved",
+    }
+
+    app.dependency_overrides.clear()
+    from app.core.mongo import get_chat_messages_collection
+    from app.core.database import get_db
+    from app.core.storage import get_s3_public_sign_client
+
+    mock_db = AsyncMock()
+    mock_db.get.return_value = user_a
+
+    mock_s3_sign = MagicMock()
+    mock_s3_sign.generate_presigned_url.return_value = "http://fake-s3/avatar.jpg"
+
+    app.dependency_overrides[get_current_user_ws] = mock_get_current_user_ws
+    app.dependency_overrides[get_activities_collection] = lambda: mock_activities_col
+    app.dependency_overrides[get_membership_collection] = lambda: mock_membership_col
+    app.dependency_overrides[get_chat_messages_collection] = lambda: AsyncMock()
+    app.dependency_overrides[get_db] = lambda: mock_db
+    app.dependency_overrides[get_s3_public_sign_client] = lambda: mock_s3_sign
+
+    client = TestClient(app)
+    activity_id = "507f1f77bcf86cd799439011"
+
+    # Make sure rate limiter is clean for this test
+    await chat_rate_limiter.cleanup_user(activity_id, user_a.id)
+
+    # Connect User A (Tab 1)
+    with client.websocket_connect(
+        f"/activities/{activity_id}/chat?token=token_a"
+    ) as ws_a1:
+        ws_a1.receive_json()
+        ws_a1.receive_json()
+
+        # Connect User A again (Tab 2)
+        with client.websocket_connect(
+            f"/activities/{activity_id}/chat?token=token_a"
+        ) as ws_a2:
+            ws_a2.receive_json()
+            ws_a2.receive_json()
+
+            ws_a1.receive_json()
+            ws_a1.receive_json()
+
+            # Send 5 messages from User A (Tab 1) to saturate the rate limit window.
+            # Verify a 6th message is rate limited.
+            for i in range(5):
+                ws_a1.send_json({"event": "message", "data": {"content": f"msg {i}"}})
+                assert ws_a1.receive_json()["event"] == "message"
+                assert ws_a2.receive_json()["event"] == "message"
+
+            ws_a1.send_json({"event": "message", "data": {"content": "msg 6"}})
+            err = ws_a1.receive_json()
+            assert err["event"] == "error"
+            assert err["data"]["detail"] == "Rate limit exceeded. Please wait."
+
+        # Disconnect User A (Tab 2) (closes one tab) by exiting the inner context.
+        # Consume the leave and member_count events on ws_a1
+        ws_a1.receive_json()  # leave
+        ws_a1.receive_json()  # member_count
+
+        # Verify that the rate limiter is NOT cleaned up for User A because Tab 1 is still connected.
+        # A message sent from Tab 1 should still be rate limited.
+        ws_a1.send_json({"event": "message", "data": {"content": "msg 7"}})
+        err = ws_a1.receive_json()
+        assert err["event"] == "error"
+        assert err["data"]["detail"] == "Rate limit exceeded. Please wait."
+
+    # Disconnect User A (Tab 1) (closes the last tab) by exiting the outer context.
+    # Verify that the rate limiter is now cleaned up (connecting again should immediately allow messages).
+    with client.websocket_connect(
+        f"/activities/{activity_id}/chat?token=token_a"
+    ) as ws_a3:
+        ws_a3.receive_json()
+        ws_a3.receive_json()
+
+        ws_a3.send_json({"event": "message", "data": {"content": "fresh start msg"}})
+        msg = ws_a3.receive_json()
+        assert msg["event"] == "message"
 
     app.dependency_overrides.clear()
 
