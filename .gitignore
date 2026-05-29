@@ -19,3 +19,4 @@ run_test.py
 /.agents/
 /.antigravitycli/
 /docs
+/backend/e2e_verify.py
