@@ -55,10 +55,13 @@ async def get_activities_collection() -> AsyncCollection:
 
 async def get_chat_messages_collection() -> AsyncCollection:
     db = await get_mongo_db()
-    collection = db["chat_messages"]
+    return db["chat_messages"]
+
+
+async def ensure_chat_messages_indexes() -> None:
+    collection = await get_chat_messages_collection()
     await collection.create_index([("activity_id", ASCENDING), ("_id", DESCENDING)])
     await collection.create_index([("activity_id", ASCENDING)])
-    return collection
 
 
 async def get_membership_collection() -> AsyncCollection:
