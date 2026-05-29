@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from pymongo import ASCENDING, AsyncMongoClient
+from pymongo import ASCENDING, DESCENDING, AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
@@ -51,6 +51,17 @@ async def get_mongo_db() -> AsyncDatabase:
 async def get_activities_collection() -> AsyncCollection:
     db = await get_mongo_db()
     return db["activities"]
+
+
+async def get_chat_messages_collection() -> AsyncCollection:
+    db = await get_mongo_db()
+    return db["chat_messages"]
+
+
+async def ensure_chat_messages_indexes() -> None:
+    collection = await get_chat_messages_collection()
+    await collection.create_index([("activity_id", ASCENDING), ("_id", DESCENDING)])
+    await collection.create_index([("activity_id", ASCENDING)])
 
 
 async def get_membership_collection() -> AsyncCollection:
