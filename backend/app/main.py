@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api import activity, auth, games, health, membership, profile
+from app.api import activity, auth, chat, games, health, membership, profile
 from app.core.config import settings
 from app.core.mongo import close_mongo, init_mongo
 from app.core.http_client import init_http_client, close_http_client
@@ -50,6 +50,7 @@ app.include_router(profile.router)
 app.include_router(activity.router)
 app.include_router(games.router)
 app.include_router(membership.router)
+app.include_router(chat.router)
 
 
 @app.get("/")
