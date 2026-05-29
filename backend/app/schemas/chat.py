@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
@@ -13,6 +13,7 @@ class MessageType(str, Enum):
 
 
 class ClientChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     content: str = Field(..., min_length=1, max_length=2000)
 
     @field_validator("content", mode="before")
@@ -47,9 +48,22 @@ class ChatHistoryResponse(BaseModel):
     has_more: bool
 
 
+class WebSocketEvent(str, Enum):
+    message = "message"
+    system = "system"
+    member_count = "member_count"
+    error = "error"
+
+
+class SystemEventType(str, Enum):
+    join = "join"
+    leave = "leave"
+    kicked = "kicked"
+
+
 class WebSocketSystemData(BaseModel):
     content: str
-    type: str
+    type: SystemEventType
 
 
 class WebSocketMemberCountData(BaseModel):
@@ -61,7 +75,7 @@ class WebSocketErrorData(BaseModel):
 
 
 class WebSocketEnvelope(BaseModel):
-    event: str
+    event: WebSocketEvent
     data: (
         ChatMessageResponse
         | WebSocketSystemData

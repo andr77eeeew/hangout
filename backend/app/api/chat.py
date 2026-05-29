@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPExce
 from pymongo.asynchronous.collection import AsyncCollection
 from sqlalchemy.ext.asyncio import AsyncSession
 from botocore.client import BaseClient
+from pydantic import ValidationError
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user_ws, get_current_user
@@ -16,11 +17,14 @@ from app.core.ws_manager import connection_manager
 from app.core.ws_rate_limit import chat_rate_limiter, MAX_VIOLATIONS_BEFORE_DISCONNECT
 from app.models.user import User
 from app.schemas.chat import (
+    ClientChatMessage,
     WebSocketEnvelope,
     WebSocketSystemData,
     WebSocketErrorData,
     ChatHistoryResponse,
     WebSocketMemberCountData,
+    WebSocketEvent,
+    SystemEventType,
 )
 from app.services.chat import ChatService
 
@@ -82,16 +86,16 @@ async def websocket_chat(
     await connection_manager.connect(websocket, activity_id, user.id)
 
     join_envelope = WebSocketEnvelope(
-        event="join",
+        event=WebSocketEvent.system,
         data=WebSocketSystemData(
-            content=f"{user.username} joined the chat", type="join"
+            content=f"{user.username} joined the chat", type=SystemEventType.join
         ),
     )
     await connection_manager.broadcast_to_room(activity_id, join_envelope)
 
     online_count = await connection_manager.get_room_user_count(activity_id)
     count_envelope = WebSocketEnvelope(
-        event="member_count",
+        event=WebSocketEvent.member_count,
         data=WebSocketMemberCountData(online_count=online_count),
     )
     await connection_manager.broadcast_to_room(activity_id, count_envelope)
@@ -103,7 +107,7 @@ async def websocket_chat(
                 payload = json.loads(data_str)
             except json.JSONDecodeError:
                 error_envelope = WebSocketEnvelope(
-                    event="error",
+                    event=WebSocketEvent.error,
                     data=WebSocketErrorData(detail="Invalid JSON format"),
                 )
                 await websocket.send_text(error_envelope.model_dump_json())
@@ -111,7 +115,7 @@ async def websocket_chat(
 
             if not isinstance(payload, dict):
                 error_envelope = WebSocketEnvelope(
-                    event="error",
+                    event=WebSocketEvent.error,
                     data=WebSocketErrorData(detail="Invalid message format"),
                 )
                 await websocket.send_text(error_envelope.model_dump_json())
@@ -120,50 +124,44 @@ async def websocket_chat(
             event = payload.get("event")
             if event != "message":
                 error_envelope = WebSocketEnvelope(
-                    event="error",
+                    event=WebSocketEvent.error,
                     data=WebSocketErrorData(detail=f"Unknown event: {event}"),
                 )
                 await websocket.send_text(error_envelope.model_dump_json())
                 continue
 
             data = payload.get("data")
-            if (
-                not isinstance(data, dict)
-                or "content" not in data
-                or not isinstance(data["content"], str)
-            ):
+            if not isinstance(data, dict):
                 error_envelope = WebSocketEnvelope(
-                    event="error",
+                    event=WebSocketEvent.error,
                     data=WebSocketErrorData(detail="Invalid message format"),
                 )
                 await websocket.send_text(error_envelope.model_dump_json())
                 continue
 
-            content = data["content"].strip()
-            if not content:
+            try:
+                client_msg = ClientChatMessage(**data)
+                content = client_msg.content
+            except ValidationError as e:
+                # Extract a clean validation error message from Pydantic
+                error_detail = e.errors()[0]["msg"]
                 error_envelope = WebSocketEnvelope(
-                    event="error",
-                    data=WebSocketErrorData(detail="Message content cannot be empty"),
+                    event=WebSocketEvent.error,
+                    data=WebSocketErrorData(detail=error_detail),
                 )
                 await websocket.send_text(error_envelope.model_dump_json())
                 continue
 
-            if len(content) > 2000:
-                error_envelope = WebSocketEnvelope(
-                    event="error",
-                    data=WebSocketErrorData(detail="Message content is too long"),
+            if not await chat_rate_limiter.check_rate_limit(activity_id, user.id):
+                violations = await chat_rate_limiter.get_violation_count(
+                    activity_id, user.id
                 )
-                await websocket.send_text(error_envelope.model_dump_json())
-                continue
-
-            if not chat_rate_limiter.check_rate_limit(activity_id, user.id):
-                violations = chat_rate_limiter.get_violation_count(activity_id, user.id)
                 if violations >= MAX_VIOLATIONS_BEFORE_DISCONNECT:
                     await websocket.close(code=4008)
                     break
                 else:
                     error_envelope = WebSocketEnvelope(
-                        event="error",
+                        event=WebSocketEvent.error,
                         data=WebSocketErrorData(
                             detail="Rate limit exceeded. Please wait."
                         ),
@@ -179,25 +177,30 @@ async def websocket_chat(
                 db=db,
                 s3_public_sign=s3_public_sign,
             )
-            msg_envelope = WebSocketEnvelope(event="message", data=saved_msg)
+            msg_envelope = WebSocketEnvelope(
+                event=WebSocketEvent.message, data=saved_msg
+            )
             await connection_manager.broadcast_to_room(activity_id, msg_envelope)
 
     except WebSocketDisconnect:
         pass
     finally:
         await connection_manager.disconnect(websocket, activity_id, user.id)
+
+        leave_envelope = WebSocketEnvelope(
+            event=WebSocketEvent.system,
+            data=WebSocketSystemData(
+                content=f"{user.username} left the chat", type=SystemEventType.leave
+            ),
+        )
+        await connection_manager.broadcast_to_room(activity_id, leave_envelope)
+
         online_count = await connection_manager.get_room_user_count(activity_id)
         count_envelope = WebSocketEnvelope(
-            event="member_count",
+            event=WebSocketEvent.member_count,
             data=WebSocketMemberCountData(online_count=online_count),
         )
         await connection_manager.broadcast_to_room(activity_id, count_envelope)
 
-        chat_rate_limiter.cleanup_user(activity_id, user.id)
-        leave_envelope = WebSocketEnvelope(
-            event="leave",
-            data=WebSocketSystemData(
-                content=f"{user.username} left the chat", type="leave"
-            ),
-        )
-        await connection_manager.broadcast_to_room(activity_id, leave_envelope)
+        if not await connection_manager.has_user_connections(activity_id, user.id):
+            await chat_rate_limiter.cleanup_user(activity_id, user.id)
