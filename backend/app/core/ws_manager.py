@@ -64,6 +64,12 @@ class ConnectionManager:
                 return len(self._rooms[activity_id])
             return 0
 
+    async def has_user_connections(self, activity_id: str, user_id: int) -> bool:
+        async with self._lock:
+            if activity_id in self._rooms:
+                return user_id in self._rooms[activity_id]
+            return False
+
     async def disconnect_user(
         self,
         activity_id: str,

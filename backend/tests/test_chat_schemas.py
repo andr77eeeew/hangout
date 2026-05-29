@@ -11,6 +11,8 @@ from app.schemas.chat import (
     WebSocketErrorData,
     WebSocketEnvelope,
     MessageType,
+    WebSocketEvent,
+    SystemEventType,
 )
 
 
@@ -30,6 +32,11 @@ def test_client_chat_message_validation():
     # Content length > 2000
     with pytest.raises(ValidationError):
         ClientChatMessage(content="a" * 2001)
+
+
+def test_client_chat_message_extra_fields_forbidden():
+    with pytest.raises(ValidationError):
+        ClientChatMessage(content="hello", message_type="system")
 
 
 def test_chat_message_response_validation():
@@ -98,15 +105,15 @@ def test_websocket_envelope_with_chat_message():
 def test_websocket_envelope_with_system_data():
     system_data = {
         "content": "User bob has joined.",
-        "type": "join",
+        "type": SystemEventType.join,
     }
     envelope = WebSocketEnvelope(
-        event="system",
+        event=WebSocketEvent.system,
         data=WebSocketSystemData(**system_data),
     )
-    assert envelope.event == "system"
+    assert envelope.event == WebSocketEvent.system
     assert isinstance(envelope.data, WebSocketSystemData)
-    assert envelope.data.type == "join"
+    assert envelope.data.type == SystemEventType.join
 
 
 def test_websocket_envelope_with_member_count():
@@ -114,10 +121,10 @@ def test_websocket_envelope_with_member_count():
         "online_count": 5,
     }
     envelope = WebSocketEnvelope(
-        event="presence",
+        event=WebSocketEvent.member_count,
         data=WebSocketMemberCountData(**member_data),
     )
-    assert envelope.event == "presence"
+    assert envelope.event == WebSocketEvent.member_count
     assert isinstance(envelope.data, WebSocketMemberCountData)
     assert envelope.data.online_count == 5
 
@@ -127,9 +134,25 @@ def test_websocket_envelope_with_error():
         "detail": "Failed to connect",
     }
     envelope = WebSocketEnvelope(
-        event="error",
+        event=WebSocketEvent.error,
         data=WebSocketErrorData(**error_data),
     )
-    assert envelope.event == "error"
+    assert envelope.event == WebSocketEvent.error
     assert isinstance(envelope.data, WebSocketErrorData)
     assert envelope.data.detail == "Failed to connect"
+
+
+def test_websocket_schemas_invalid_types():
+    # WebSocketEnvelope with an invalid event raises ValidationError
+    with pytest.raises(ValidationError):
+        WebSocketEnvelope(
+            event="invalid",
+            data=WebSocketErrorData(detail="Something"),
+        )
+
+    # WebSocketSystemData with an invalid type raises ValidationError
+    with pytest.raises(ValidationError):
+        WebSocketSystemData(
+            content="Hello",
+            type="invalid",
+        )
