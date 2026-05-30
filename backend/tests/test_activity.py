@@ -192,3 +192,102 @@ async def test_delete_activity_success(async_client, mock_mongo):
         response = await async_client.delete("/activities/fake-id")
 
     assert response.status_code == 204
+
+
+async def test_update_activity_category_without_extra_data_fail(
+    async_client, mock_mongo, mock_db
+):
+    # Stored activity is in 'foods' category (has no extra_data)
+    stored_doc = {
+        "_id": "60d5ec49c4f1c9a6f81a1b3a",
+        "title": "Stored Foods Activity",
+        "description": "Very long description for this foods activity",
+        "type": "open",
+        "format": "online",
+        "category": "foods",
+        "extra_data": None,
+        "date": "2026-10-10T12:00:00Z",
+        "max_members": 10,
+        "creator_id": 1,
+        "status": "active",
+        "members": [],
+        "tags": ["foods"],
+    }
+    mock_mongo.find_one = AsyncMock(return_value=stored_doc)
+
+    # Payload changes category to 'games' but doesn't supply 'extra_data'
+    payload = {"category": "games"}
+    response = await async_client.patch(
+        "/activities/60d5ec49c4f1c9a6f81a1b3a", json=payload
+    )
+
+    assert response.status_code == 422
+    assert "extra_data is required for games category" in response.json()["detail"]
+
+
+async def test_update_activity_format_offline_without_location_fail(
+    async_client, mock_mongo, mock_db
+):
+    # Stored activity is online and has no location
+    stored_doc = {
+        "_id": "60d5ec49c4f1c9a6f81a1b3a",
+        "title": "Stored Online Activity",
+        "description": "Very long description for this online activity",
+        "type": "open",
+        "format": "online",
+        "category": "foods",
+        "extra_data": None,
+        "location": None,
+        "date": "2026-10-10T12:00:00Z",
+        "max_members": 10,
+        "creator_id": 1,
+        "status": "active",
+        "members": [],
+        "tags": ["online"],
+    }
+    mock_mongo.find_one = AsyncMock(return_value=stored_doc)
+
+    # Payload changes format to 'offline' but doesn't supply 'location'
+    payload = {"format": "offline"}
+    response = await async_client.patch(
+        "/activities/60d5ec49c4f1c9a6f81a1b3a", json=payload
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    if isinstance(detail, list):
+        assert "location is required for offline activity" in detail[0]["msg"]
+    else:
+        assert "location is required for offline activity" in detail
+
+
+async def test_update_activity_clear_location_for_offline_fail(
+    async_client, mock_mongo, mock_db
+):
+    # Stored activity is offline and has a location
+    stored_doc = {
+        "_id": "60d5ec49c4f1c9a6f81a1b3a",
+        "title": "Stored Offline Activity",
+        "description": "Very long description for this offline activity",
+        "type": "open",
+        "format": "offline",
+        "category": "foods",
+        "extra_data": None,
+        "location": "Some Street 12",
+        "date": "2026-10-10T12:00:00Z",
+        "max_members": 10,
+        "creator_id": 1,
+        "status": "active",
+        "members": [],
+        "tags": ["offline"],
+    }
+    mock_mongo.find_one = AsyncMock(return_value=stored_doc)
+
+    # Payload updates location to None (clears it)
+    payload = {"location": None}
+    response = await async_client.patch(
+        "/activities/60d5ec49c4f1c9a6f81a1b3a", json=payload
+    )
+
+    assert response.status_code == 422
+    assert "location is required for offline activity" in response.json()["detail"]

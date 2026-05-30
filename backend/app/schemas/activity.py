@@ -289,6 +289,20 @@ class ActivityUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=10, max_length=2000)
     location: str | None = None
     tags: ValidTags | None = None
+    extra_data: Annotated[
+        GameDetails
+        | BoardGameDetails
+        | MovieDetails
+        | AnimeDetails
+        | SportDetails
+        | MusicDetails
+        | None,
+        Field(
+            default=None,
+            discriminator="category",
+            description="Category-specific details. Required if category is not 'foods'.",
+        ),
+    ] = None
 
     @field_validator("date")
     @classmethod

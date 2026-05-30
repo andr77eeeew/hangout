@@ -246,6 +246,57 @@ class ActivityService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing to update"
             )
 
+        # Validate the merged final document (stored doc + payload changes)
+        merged = {**doc, **update_data}
+
+        # Normalize types for comparison (handling potential Enum objects)
+        fmt = merged.get("format")
+        if fmt is not None and hasattr(fmt, "value"):
+            fmt = fmt.value
+
+        cat = merged.get("category")
+        if cat is not None and hasattr(cat, "value"):
+            cat = cat.value
+
+        loc = merged.get("location")
+        extra = merged.get("extra_data")
+
+        # 1. Offline format requires location
+        if fmt == "offline" and loc is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="location is required for offline activity",
+            )
+
+        # 2. Category vs extra_data sync
+        if cat == "foods":
+            if extra is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="For 'foods' category, extra_data must be null",
+                )
+        else:
+            if extra is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"extra_data is required for {cat} category",
+                )
+
+            # extra can be a dictionary or a Pydantic model
+            extra_cat = (
+                extra.get("category")
+                if isinstance(extra, dict)
+                else getattr(extra, "category", None)
+            )
+            if extra_cat is not None and hasattr(extra_cat, "value"):
+                extra_cat = extra_cat.value
+
+            if extra_cat != cat:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Activity category must match extra_data category",
+                )
+
         update_data["updated_at"] = datetime.now(timezone.utc)
 
         result = await collection.find_one_and_update(
