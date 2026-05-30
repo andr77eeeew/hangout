@@ -7,6 +7,7 @@ without wiring up the full HTTP → router → response-validation chain.
 """
 
 from datetime import datetime, timezone
+from fastapi import HTTPException
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -90,7 +91,7 @@ async def _call_feed(
 
     # Patch _fetch_users_map to avoid real SQL queries
     original = ActivityService._fetch_users_map
-    ActivityService._fetch_users_map = AsyncMock(return_value={})
+    ActivityService._fetch_users_map = AsyncMock(return_value={})  # type: ignore[method-assign]
     try:
         result = await ActivityService.list_feed(
             collection=col,
@@ -105,7 +106,7 @@ async def _call_feed(
             date_to=date_to,
         )
     finally:
-        ActivityService._fetch_users_map = original
+        ActivityService._fetch_users_map = original  # type: ignore[method-assign]
 
     return result, col
 
@@ -288,7 +289,7 @@ class TestFeedCursorWithFilters:
     async def test_invalid_cursor_raises_400(self):
         col = _mock_collection([])
 
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             await _call_feed(col, cursor="not-an-objectid")
 
         assert exc_info.value.status_code == 400

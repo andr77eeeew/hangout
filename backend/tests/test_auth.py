@@ -37,7 +37,7 @@ async def test_register_email_conflict(async_client, mock_db):
     }
 
     # Имитируем ошибку уникальности в БД (email занят)
-    class FakeOrig:
+    class FakeOrig(BaseException):
         def __str__(self):
             return "duplicate key value violates unique constraint 'ix_users_email'"
 

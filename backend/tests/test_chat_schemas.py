@@ -36,7 +36,7 @@ def test_client_chat_message_validation():
 
 def test_client_chat_message_extra_fields_forbidden():
     with pytest.raises(ValidationError):
-        ClientChatMessage(content="hello", message_type="system")
+        ClientChatMessage.model_validate({"content": "hello", "message_type": "system"})
 
 
 def test_chat_message_response_validation():
