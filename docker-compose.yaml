@@ -1,5 +1,6 @@
 services:
   backend:
+    restart: unless-stopped
     build: ./backend
     ports:
       - "8000:8000"
@@ -7,17 +8,17 @@ services:
       - .env
     volumes:
       - ./backend:/app
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
-      postgres:
-        condition: service_healthy
-      mongodb:
-        condition: service_started
-      minio:
-        condition: service_started
-      redis:
-        condition: service_started
-      rabbitmq:
-        condition: service_started
+      postgres: { condition: service_healthy }
+      mongodb: { condition: service_healthy }
+      minio: { condition: service_started }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_started }
 
   celery_worker:
     build: ./backend
@@ -42,6 +43,11 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:16
@@ -75,6 +81,11 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
