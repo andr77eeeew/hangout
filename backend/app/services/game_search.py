@@ -64,7 +64,7 @@ class GameSearchService:
             response.raise_for_status()
             data = response.json()
 
-        except (httpx.Timeout, httpx.HTTPError):
+        except httpx.HTTPError:
             return [], False
 
         results = GameSearchService._parse_rawg_result(data)

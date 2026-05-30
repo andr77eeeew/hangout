@@ -56,7 +56,7 @@ class WebSocketEvent(str, Enum):
 
 
 class SystemEventType(str, Enum):
-    join = "join"
+    join = "join"  # type: ignore[assignment]
     leave = "leave"
     kicked = "kicked"
 

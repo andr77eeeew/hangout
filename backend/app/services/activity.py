@@ -150,7 +150,7 @@ class ActivityService:
                 fetch_game_cover.delay(str(result.inserted_id), game_name)
 
         created_activity = await collection.find_one({"_id": result.inserted_id})
-
+        assert created_activity is not None
         return await ActivityService._to_activity_response(
             created_activity, db, s3_public_sign
         )

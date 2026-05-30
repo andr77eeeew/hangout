@@ -21,12 +21,12 @@ class TagService:
         ]
 
         stmt = insert(Tag).values(values)
-        stmt = stmt.on_conflict_do_update(
+        returning_stmt = stmt.on_conflict_do_update(
             index_elements=["slug"],
             set_={"usage_count": Tag.usage_count + 1},
         ).returning(Tag)
 
-        result = await db.execute(stmt)
+        result = await db.execute(returning_stmt)
         await db.commit()
 
         return list(result.scalars().all())

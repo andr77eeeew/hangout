@@ -98,6 +98,7 @@ class MembershipService:
                     detail="Activity is full",
                 )
         created = await membership_col.find_one({"_id": result.inserted_id})
+        assert created is not None
         return MembershipResponse(**created, user_preview=None)
 
     @staticmethod
@@ -180,6 +181,7 @@ class MembershipService:
             {"$set": {"status": MembershipStatus.approved.value}},
             return_document=ReturnDocument.AFTER,
         )
+        assert updated is not None
         return MembershipResponse(**updated, user_preview=None)
 
     @staticmethod
@@ -209,6 +211,7 @@ class MembershipService:
             {"$set": {"status": MembershipStatus.rejected.value}},
             return_document=ReturnDocument.AFTER,
         )
+        assert updated is not None
         return MembershipResponse(**updated, user_preview=None)
 
     @staticmethod
@@ -254,7 +257,7 @@ class MembershipService:
             },
             {"$inc": {"current_members": -1}},
         )
-
+        assert updated is not None
         return MembershipResponse(**updated, user_preview=None)
 
     @staticmethod

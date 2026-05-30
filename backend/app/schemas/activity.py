@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 
@@ -149,15 +149,13 @@ class ActivityBase(BaseModel):
     )
     category: ActivityCategory
     extra_data: Annotated[
-        Union[
-            GameDetails
-            | BoardGameDetails
-            | MovieDetails
-            | AnimeDetails
-            | SportDetails
-            | MusicDetails
-            | None
-        ],
+        GameDetails
+        | BoardGameDetails
+        | MovieDetails
+        | AnimeDetails
+        | SportDetails
+        | MusicDetails
+        | None,
         Field(
             discriminator="category",
             description="""Category-specific details. 
@@ -338,9 +336,9 @@ class ActivityUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_location_for_offline(self):
-        # ВНИМАНИЕ: эта валидация проверяет только текущий payload.
-        # Если format=offline приходит без location, и в БД location уже null —
-        # итоговый документ будет невалидным. Полная валидация должна быть на уровне сервиса.
+        # NOTE: validates the current payload only. If format=offline arrives
+        # without location while the stored document already has location=null,
+        # the resulting document is invalid. Enforce full validation in the service layer.
         if self.format == ActivityFormat.offline and self.location is None:
             raise ValueError("location is required for offline activity")
 

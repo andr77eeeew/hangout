@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from botocore.client import BaseClient
 from fastapi import HTTPException, status
+from mypy.nodes import Any
 from pymongo.asynchronous.collection import AsyncCollection
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,7 +126,7 @@ class ChatService:
             )
 
         limit = min(max(1, limit), 100)
-        query = {"activity_id": ObjectId(activity_id)}
+        query: dict[str, Any] = {"activity_id": ObjectId(activity_id)}
 
         if cursor is not None:
             query["_id"] = {"$lt": ObjectId(cursor)}

@@ -41,6 +41,8 @@ async def get_current_user(
     if token_type != "access":
         raise credentials_exception
     sub = payload.get("sub")
+    if sub is None:
+        raise credentials_exception
     try:
         user_id = int(sub)
     except (TypeError, ValueError):
@@ -78,6 +80,9 @@ async def get_current_user_ws(
         raise WebSocketException(code=4001, reason="Invalid token type")
 
     sub = payload.get("sub")
+    if sub is None:
+        await websocket.close(code=4001)
+        raise WebSocketException(code=4001, reason="Invalid user ID")
     try:
         user_id = int(sub)
     except (TypeError, ValueError):

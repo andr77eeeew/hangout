@@ -97,6 +97,8 @@ class AuthService:
             raise invalid_token
 
         sub = payload.get("sub")
+        if sub is None:
+            raise invalid_token
         try:
             user_id = int(sub)
         except (ValueError, TypeError):
@@ -131,7 +133,12 @@ class AuthService:
         user_session_key = f"user_sessions:{user_id}"
         jtis = await redis.smembers(user_session_key)
         if jtis:
-            keys = [AuthService._refresh_key(jti) for jti in jtis]
+            keys = [
+                AuthService._refresh_key(
+                    jti.decode("utf-8") if isinstance(jti, bytes) else jti
+                )
+                for jti in jtis
+            ]
             await redis.delete(*keys)
         await redis.delete(user_session_key)
 
@@ -145,5 +152,7 @@ class AuthService:
         user_id_str = await redis.getdel(key)
         if user_id_str is None:
             return False
+        if isinstance(user_id_str, bytes):
+            user_id_str = user_id_str.decode("utf-8")
         await redis.srem(f"user_sessions:{user_id_str}", jti)
         return True

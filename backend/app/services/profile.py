@@ -147,7 +147,7 @@ class ProfileService:
             raise HTTPException(status_code=500, detail="Failed to update user profile")
         try:
             await run_in_threadpool(
-                s3.put_object,
+                s3.put_object,  # type: ignore[attr-defined]
                 Bucket=settings.BUCKET_NAME,
                 Key=object_key,
                 Body=content,
@@ -157,7 +157,9 @@ class ProfileService:
             if old_key and old_key != object_key:
                 try:
                     await run_in_threadpool(
-                        s3.delete_object, Bucket=settings.BUCKET_NAME, Key=old_key
+                        s3.delete_object,  # type: ignore[attr-defined]
+                        Bucket=settings.BUCKET_NAME,
+                        Key=old_key,
                     )
                 except Exception as delete_error:
                     logger.warning(
