@@ -64,9 +64,8 @@ async def ensure_chat_messages_indexes() -> None:
     await collection.create_index([("activity_id", ASCENDING)])
 
 
-async def get_membership_collection() -> AsyncCollection:
-    db = await get_mongo_db()
-    collection = db["membership"]
+async def ensure_membership_indexes() -> None:
+    collection = await get_membership_collection()
     await collection.create_index(
         [("activity_id", ASCENDING), ("user_id", ASCENDING)],
         unique=True,
@@ -74,11 +73,24 @@ async def get_membership_collection() -> AsyncCollection:
     )
     await collection.create_index([("activity_id", ASCENDING), ("status", ASCENDING)])
     await collection.create_index([("user_id", ASCENDING), ("status", ASCENDING)])
-    return collection
+
+
+async def ensure_game_covers_indexes() -> None:
+    collection = await get_game_covers_collection()
+    await collection.create_index([("game_id", ASCENDING)], unique=True)
+
+
+async def ensure_mongo_indexes() -> None:
+    await ensure_chat_messages_indexes()
+    await ensure_membership_indexes()
+    await ensure_game_covers_indexes()
+
+
+async def get_membership_collection() -> AsyncCollection:
+    db = await get_mongo_db()
+    return db["membership"]
 
 
 async def get_game_covers_collection() -> AsyncCollection:
     db = await get_mongo_db()
-    collection = db["game_covers"]
-    await collection.create_index([("game_id", ASCENDING)], unique=True)
-    return collection
+    return db["game_covers"]

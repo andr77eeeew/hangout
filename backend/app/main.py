@@ -6,7 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api import activity, auth, chat, games, health, membership, profile
 from app.core.config import settings
-from app.core.mongo import close_mongo, ensure_chat_messages_indexes, init_mongo
+from app.core.mongo import close_mongo, ensure_mongo_indexes, init_mongo
 from app.core.http_client import init_http_client, close_http_client
 from app.core.redis_client import redis_client
 from app.core.storage import ensure_bucket_exists
@@ -23,7 +23,7 @@ async def lifespan(_app: FastAPI):
         await ensure_bucket_exists()
         await redis_client.ping()
         await init_mongo()
-        await ensure_chat_messages_indexes()
+        await ensure_mongo_indexes()
         await init_http_client()
         yield
     finally:
