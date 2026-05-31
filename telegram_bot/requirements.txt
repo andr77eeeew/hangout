@@ -1,0 +1,5 @@
+aiogram==3.17.0
+httpx==0.28.1
+pydantic-settings==2.14.1
+pytest==9.0.3
+pytest-asyncio==1.4.0
