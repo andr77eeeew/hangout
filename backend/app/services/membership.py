@@ -99,6 +99,14 @@ class MembershipService:
                 )
         created = await membership_col.find_one({"_id": result.inserted_id})
         assert created is not None
+        if activity["type"] == "closed":
+            from app.tasks.notifications import notify_membership_change_task
+
+            notify_membership_change_task.delay(
+                user_id=activity["creator_id"],
+                activity_title=activity.get("title") or "Unnamed Activity",
+                change_type="applied",
+            )
         return MembershipResponse(**created, user_preview=None)
 
     @staticmethod
@@ -182,6 +190,13 @@ class MembershipService:
             return_document=ReturnDocument.AFTER,
         )
         assert updated is not None
+        from app.tasks.notifications import notify_membership_change_task
+
+        notify_membership_change_task.delay(
+            user_id=membership["user_id"],
+            activity_title=activity.get("title") or "Unnamed Activity",
+            change_type="approved",
+        )
         return MembershipResponse(**updated, user_preview=None)
 
     @staticmethod
@@ -196,7 +211,7 @@ class MembershipService:
             membership_id, membership_col
         )
 
-        await MembershipService._check_creator_or_moderator(
+        activity = await MembershipService._check_creator_or_moderator(
             membership["activity_id"], user_id, is_moderator, activities_col
         )
 
@@ -212,6 +227,13 @@ class MembershipService:
             return_document=ReturnDocument.AFTER,
         )
         assert updated is not None
+        from app.tasks.notifications import notify_membership_change_task
+
+        notify_membership_change_task.delay(
+            user_id=membership["user_id"],
+            activity_title=activity.get("title") or "Unnamed Activity",
+            change_type="rejected",
+        )
         return MembershipResponse(**updated, user_preview=None)
 
     @staticmethod
@@ -226,7 +248,7 @@ class MembershipService:
             membership_id, membership_col
         )
 
-        await MembershipService._check_creator_or_moderator(
+        activity = await MembershipService._check_creator_or_moderator(
             membership["activity_id"], user_id, is_moderator, activities_col
         )
 
@@ -258,6 +280,13 @@ class MembershipService:
             {"$inc": {"current_members": -1}},
         )
         assert updated is not None
+        from app.tasks.notifications import notify_membership_change_task
+
+        notify_membership_change_task.delay(
+            user_id=membership["user_id"],
+            activity_title=activity.get("title") or "Unnamed Activity",
+            change_type="kicked",
+        )
         return MembershipResponse(**updated, user_preview=None)
 
     @staticmethod

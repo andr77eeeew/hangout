@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -21,3 +22,10 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(["app.tasks", "app.services", "app.tasks.rawg"])
+
+celery_app.conf.beat_schedule = {
+    "check-activity-reminders": {
+        "task": "app.tasks.notifications.check_activity_reminders",
+        "schedule": crontab(minute="*/15"),
+    },
+}
