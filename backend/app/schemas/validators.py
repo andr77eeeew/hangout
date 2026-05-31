@@ -7,6 +7,8 @@ from pydantic import AfterValidator
 def _validate_password(value: str) -> str:
     if len(value) < 8:
         raise ValueError("Password must be at least 8 characters")
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("Password cannot be longer than 72 bytes")
     if not re.search(r"[A-Z]", value):
         raise ValueError("Password must contain at least one capital letter")
     if not re.search(r"\d", value):
