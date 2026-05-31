@@ -8,8 +8,15 @@ from app.core.redis_client import get_redis
 from app.core.storage import get_s3_client, get_s3_public_sign_client
 from app.models.user import User
 from app.schemas.user import PasswordUpdate, UserResponse, UserUpdate
+from app.schemas.notifications import (
+    NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
+)
+from app.schemas.telegram import TelegramLinkRequest, TelegramLinkStatusResponse
 from app.services.profile import ProfileService
 from app.services.tag import TagService
+from app.services.notification_preferences import NotificationPreferencesService
+from app.services.telegram_linking import TelegramLinkingService
 
 router = APIRouter(prefix="/user", tags=["🥸 Profile"])
 profile_service = ProfileService()
@@ -76,3 +83,60 @@ async def toggle_favorite_tag(
     current_user: User = Depends(get_current_user),
 ):
     return await TagService.tag_toggle(tag_name, db, current_user)
+
+
+@router.get("/notification-preferences", response_model=NotificationPreferencesResponse)
+async def get_notification_preferences(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await NotificationPreferencesService.get_preferences(current_user.id, db)
+
+
+@router.patch(
+    "/notification-preferences", response_model=NotificationPreferencesResponse
+)
+async def update_notification_preferences(
+    data: NotificationPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await NotificationPreferencesService.update_preferences(
+        current_user.id, data, db
+    )
+
+
+@router.post("/link-telegram", response_model=TelegramLinkStatusResponse)
+async def link_telegram(
+    data: TelegramLinkRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    user = await TelegramLinkingService.link_user(current_user.id, data.code, db, redis)
+    return TelegramLinkStatusResponse(
+        is_linked=user.telegram_id is not None,
+        telegram_id=user.telegram_id,
+    )
+
+
+@router.delete("/link-telegram", response_model=TelegramLinkStatusResponse)
+async def unlink_telegram(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await TelegramLinkingService.unlink_user(current_user.id, db)
+    return TelegramLinkStatusResponse(
+        is_linked=user.telegram_id is not None,
+        telegram_id=user.telegram_id,
+    )
+
+
+@router.get("/telegram-link", response_model=TelegramLinkStatusResponse)
+async def get_telegram_link_status(
+    current_user: User = Depends(get_current_user),
+):
+    return TelegramLinkStatusResponse(
+        is_linked=current_user.telegram_id is not None,
+        telegram_id=current_user.telegram_id,
+    )
