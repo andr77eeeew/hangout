@@ -114,8 +114,12 @@ async def test_ensure_mongo_indexes() -> None:
         patch(
             "app.core.mongo.ensure_game_covers_indexes", new_callable=AsyncMock
         ) as m_game,
+        patch(
+            "app.core.mongo.ensure_reports_indexes", new_callable=AsyncMock
+        ) as m_reports,
     ):
         await ensure_mongo_indexes()
         m_chat.assert_called_once()
         m_mem.assert_called_once()
         m_game.assert_called_once()
+        m_reports.assert_called_once()
