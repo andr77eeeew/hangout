@@ -45,3 +45,4 @@ class User(Base):
     created_activities_count: Mapped[int] = mapped_column(
         default=0, nullable=False, server_default="0"
     )
+    is_banned: Mapped[bool] = mapped_column(default=False, server_default="false")
