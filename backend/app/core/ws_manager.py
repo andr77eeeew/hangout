@@ -89,5 +89,25 @@ class ConnectionManager:
                 pass
             await self.disconnect(ws, activity_id, user_id)
 
+    async def disconnect_user_globally(
+        self,
+        user_id: int,
+        code: int = 4001,
+        reason: str = "Account banned",
+    ) -> None:
+        async with self._lock:
+            user_rooms_sockets: list[tuple[str, WebSocket]] = []
+            for activity_id, users_dict in self._rooms.items():
+                if user_id in users_dict:
+                    for ws in users_dict[user_id]:
+                        user_rooms_sockets.append((activity_id, ws))
+
+        for activity_id, ws in user_rooms_sockets:
+            try:
+                await ws.close(code=code, reason=reason)
+            except Exception:
+                pass
+            await self.disconnect(ws, activity_id, user_id)
+
 
 connection_manager = ConnectionManager()

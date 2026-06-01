@@ -38,7 +38,9 @@ class AuthService:
             raise HTTPException(status_code=409, detail="User already exists")
 
     @staticmethod
-    async def authenticate_user(email: str, password: str, db: AsyncSession):
+    async def authenticate_user(
+        email: str, password: str, db: AsyncSession
+    ) -> User | None:
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if user is None:
@@ -46,6 +48,9 @@ class AuthService:
 
         if not verify_password(password, user.password):
             return None
+
+        if user.is_banned:
+            raise HTTPException(status_code=403, detail="User is banned")
 
         return user
 
@@ -106,7 +111,7 @@ class AuthService:
 
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
-        if user is None or not user.is_active:
+        if user is None or not user.is_active or user.is_banned:
             raise invalid_token
 
         return user, jti

@@ -54,6 +54,12 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
+    if user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is banned",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
@@ -97,5 +103,8 @@ async def get_current_user_ws(
     if user is None or not user.is_active:
         await websocket.close(code=4001)
         raise WebSocketException(code=4001, reason="User inactive or not found")
+    if user.is_banned:
+        await websocket.close(code=4001)
+        raise WebSocketException(code=4001, reason="User is banned")
 
     return user
