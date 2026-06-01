@@ -17,3 +17,9 @@ class NotificationPreferences(Base):
         default=True, server_default="true"
     )
     tag_subscriptions: Mapped[bool] = mapped_column(default=True, server_default="true")
+    report_updates: Mapped[bool] = mapped_column(default=True, server_default="true")
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if "report_updates" not in kwargs:
+            self.report_updates = True

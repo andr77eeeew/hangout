@@ -6,6 +6,7 @@ class NotificationPreferencesResponse(BaseModel):
     membership_updates: bool
     activity_reminders: bool
     tag_subscriptions: bool
+    report_updates: bool
 
     model_config = {"from_attributes": True}
 
@@ -14,3 +15,4 @@ class NotificationPreferencesUpdate(BaseModel):
     membership_updates: bool | None = None
     activity_reminders: bool | None = None
     tag_subscriptions: bool | None = None
+    report_updates: bool | None = None

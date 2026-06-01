@@ -100,3 +100,29 @@ class NotificationService:
         formatted_tags = ", ".join(matched_tags)
         text = f"New activity <b>{activity_title}</b> matching your favorite tags: <b>{formatted_tags}</b> has been created! 🏷️"
         await NotificationService.send_telegram_message(user.telegram_id, text)
+
+    @staticmethod
+    async def notify_report_update(
+        user_id: int,
+        report_id: str,
+        status: str,
+        resolution: str,
+        db: AsyncSession,
+    ) -> None:
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        if not user or not user.is_active or not user.telegram_id:
+            return
+
+        prefs = await NotificationPreferencesService.get_preferences(user_id, db)
+        if not prefs.report_updates:
+            return
+
+        if status == "resolved":
+            text = f"Your report <code>{report_id}</code> has been <b>resolved</b>! Verdict: {resolution}."
+        elif status == "dismissed":
+            text = f"Your report <code>{report_id}</code> has been <b>dismissed</b>. Reason: {resolution}."
+        else:
+            text = f"Your report <code>{report_id}</code> status has been updated to <b>{status}</b>."
+
+        await NotificationService.send_telegram_message(user.telegram_id, text)

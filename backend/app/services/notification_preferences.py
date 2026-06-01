@@ -22,6 +22,7 @@ class NotificationPreferencesService:
                 membership_updates=True,
                 activity_reminders=True,
                 tag_subscriptions=True,
+                report_updates=True,
             )
             db.add(prefs)
             await db.flush()
@@ -43,6 +44,8 @@ class NotificationPreferencesService:
                     prefs.activity_reminders = value
                 elif key == "tag_subscriptions":
                     prefs.tag_subscriptions = value
+                elif key == "report_updates":
+                    prefs.report_updates = value
         await db.flush()
         await db.commit()
         await db.refresh(prefs)
