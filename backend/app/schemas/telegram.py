@@ -30,5 +30,6 @@ class TelegramUserResponse(BaseModel):
     id: int
     username: str
     telegram_id: str | None
+    user_role: str
 
     model_config = {"from_attributes": True}

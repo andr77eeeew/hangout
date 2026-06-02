@@ -70,6 +70,7 @@ def mock_s3_sign():
 @pytest.fixture
 def mock_user():
     from datetime import datetime, timezone
+    from app.models.user import UserRole
 
     return User(
         id=1,
@@ -80,6 +81,7 @@ def mock_user():
         avatar="avatars/test.jpg",
         banner=None,
         created_at=datetime.now(timezone.utc),
+        user_role=UserRole.client,
     )
 
 
