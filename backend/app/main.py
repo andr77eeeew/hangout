@@ -10,6 +10,7 @@ from app.api import (
     chat,
     games,
     health,
+    internal,
     membership,
     profile,
     report,
@@ -66,6 +67,7 @@ app.include_router(chat.router)
 app.include_router(report.router)
 app.include_router(telegram.router)
 app.include_router(users.router)
+app.include_router(internal.router)
 
 
 @app.get("/")

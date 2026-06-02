@@ -67,3 +67,66 @@ class TagService:
             "message": msg,
             "tag": {"id": tag.id, "name": tag.name, "slug": tag.slug},
         }
+
+    @staticmethod
+    async def add_favorite_tag(
+        tag_name: str, db: AsyncSession, current_user: User
+    ) -> dict[str, str | dict[str, str | int]]:
+        slug = slugify(tag_name)
+
+        stmt_tag = select(Tag).where(Tag.slug == slug)
+        tag = (await db.execute(stmt_tag)).scalar_one_or_none()
+
+        if not tag:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tag '{tag_name}' not found in global database",
+            )
+        stmt = select(UserTag).where(
+            UserTag.user_id == current_user.id, UserTag.tag_id == tag.id
+        )
+        result = await db.execute(stmt)
+        link = result.scalar_one_or_none()
+
+        if not link:
+            new_link = UserTag(user_id=current_user.id, tag_id=tag.id)
+            db.add(new_link)
+            await db.commit()
+
+        return {
+            "message": "Tag added to favorites",
+            "tag": {"id": tag.id, "name": tag.name, "slug": tag.slug},
+        }
+
+    @staticmethod
+    async def remove_favorite_tag(
+        tag_name: str, db: AsyncSession, current_user: User
+    ) -> dict[str, str | dict[str, str | int]]:
+        slug = slugify(tag_name)
+
+        stmt_tag = select(Tag).where(Tag.slug == slug)
+        tag = (await db.execute(stmt_tag)).scalar_one_or_none()
+
+        if not tag:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tag '{tag_name}' not found in global database",
+            )
+        stmt = select(UserTag).where(
+            UserTag.user_id == current_user.id, UserTag.tag_id == tag.id
+        )
+        result = await db.execute(stmt)
+        link = result.scalar_one_or_none()
+
+        if link:
+            await db.execute(
+                delete(UserTag).where(
+                    UserTag.user_id == current_user.id, UserTag.tag_id == tag.id
+                )
+            )
+            await db.commit()
+
+        return {
+            "message": "Tag removed from favorites",
+            "tag": {"id": tag.id, "name": tag.name, "slug": tag.slug},
+        }
