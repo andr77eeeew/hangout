@@ -3,9 +3,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from app.core.config import settings
-from app.core.database import Base
-from app.models.tags import Tag, UserTag
-from app.models.user import User
+from app.models import Base
 from sqlalchemy.ext.asyncio import create_async_engine
 
 # this is the Alembic Config object, which provides

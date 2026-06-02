@@ -9,7 +9,7 @@ services:
     volumes:
       - ./backend:/app
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,6 +23,23 @@ services:
   celery_worker:
     build: ./backend
     command: celery -A app.core.celery_config.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+
+  celery_beat:
+    build: ./backend
+    command: celery -A app.core.celery_config.celery_app beat --loglevel=info
     env_file:
       - .env
     volumes:
@@ -97,6 +114,15 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+
+  telegram_bot:
+    build: ./telegram_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   mongo_data:

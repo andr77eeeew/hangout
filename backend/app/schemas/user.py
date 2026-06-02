@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 from app.schemas.validators import ValidPassword, ValidUsername
 
@@ -26,10 +26,18 @@ class UserResponse(BaseModel):
     email: str
     bio: str | None = None
     created_at: datetime
+    is_banned: bool = False
 
     favorite_tags: list[TagResponse] = []
 
     model_config = {"from_attributes": True}
+
+    @field_validator("is_banned", mode="before")
+    @classmethod
+    def default_is_banned(cls, value: bool | None) -> bool:
+        if value is None:
+            return False
+        return value
 
 
 class UserUpdate(BaseModel):

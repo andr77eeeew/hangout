@@ -149,6 +149,10 @@ class ActivityService:
 
                 fetch_game_cover.delay(str(result.inserted_id), game_name)
 
+        from app.tasks.notifications import notify_tag_matching_users
+
+        notify_tag_matching_users.delay(str(result.inserted_id))
+
         created_activity = await collection.find_one({"_id": result.inserted_id})
         assert created_activity is not None
         return await ActivityService._to_activity_response(

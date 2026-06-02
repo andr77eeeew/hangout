@@ -13,6 +13,7 @@ os.environ["BUCKET_ENDPOINT_URL"] = "http://localhost:9000"
 os.environ["BUCKET_PUBLIC_URL"] = "http://localhost:9000"
 os.environ["CELERY_BROKER_URL"] = "amqp://guest:guest@localhost:5672//"
 os.environ["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/0"
+os.environ["INTERNAL_API_KEY"] = "test_internal_key"
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -69,6 +70,7 @@ def mock_s3_sign():
 @pytest.fixture
 def mock_user():
     from datetime import datetime, timezone
+    from app.models.user import UserRole
 
     return User(
         id=1,
@@ -79,6 +81,7 @@ def mock_user():
         avatar="avatars/test.jpg",
         banner=None,
         created_at=datetime.now(timezone.utc),
+        user_role=UserRole.client,
     )
 
 

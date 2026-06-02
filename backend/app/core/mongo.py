@@ -80,10 +80,27 @@ async def ensure_game_covers_indexes() -> None:
     await collection.create_index([("game_id", ASCENDING)], unique=True)
 
 
+async def ensure_reports_indexes() -> None:
+    collection = await get_reports_collection()
+    await collection.create_index([("status", ASCENDING), ("_id", DESCENDING)])
+    await collection.create_index(
+        [("reported_user_id", ASCENDING), ("_id", DESCENDING)]
+    )
+    await collection.create_index(
+        [
+            ("reporter_id", ASCENDING),
+            ("reported_user_id", ASCENDING),
+            ("status", ASCENDING),
+        ]
+    )
+    await collection.create_index([("moderator_id", ASCENDING), ("status", ASCENDING)])
+
+
 async def ensure_mongo_indexes() -> None:
     await ensure_chat_messages_indexes()
     await ensure_membership_indexes()
     await ensure_game_covers_indexes()
+    await ensure_reports_indexes()
 
 
 async def get_membership_collection() -> AsyncCollection:
@@ -94,3 +111,8 @@ async def get_membership_collection() -> AsyncCollection:
 async def get_game_covers_collection() -> AsyncCollection:
     db = await get_mongo_db()
     return db["game_covers"]
+
+
+async def get_reports_collection() -> AsyncCollection:
+    db = await get_mongo_db()
+    return db["reports"]

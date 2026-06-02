@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     MONGO_URL: str | None = None
 
     SECRET_KEY: SecretStr
+    INTERNAL_API_KEY: SecretStr
 
     BUCKET_USER: str
     BUCKET_PASSWORD: SecretStr
@@ -33,6 +34,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str
 
     RAWG_API_KEY: str | None = None
+    TELEGRAM_BOT_TOKEN: SecretStr | None = None
 
     @property
     def refresh_ttl_seconds(self) -> int:
